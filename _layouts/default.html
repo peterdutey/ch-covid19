@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+    <head>
+    {% include head/full.html %}
+        <!-- add htmlwidgets files -->
+	{% if page.htmlwidgets %}
+	  {% assign dep_file = page.url | split: '/' | last | prepend : 'htmlwidgets/' | append : '.html' | replace: '.Rmd', '' %}
+	  {% include {{dep_file}} %}
+	{% endif %}
+	<!-- end htmlwidgets files -->
+    {% if page.load_hc %}
+        {% include hcdeps.html %}
+    {% endif %}
+    </head>
+    <body class="layout-{{ page.layout }}" data-spy="scroll" data-target="#page-toc" data-offset="0">
+        {% include navigation.html %}
+        {% include masthead.html %}
+
+        {{ content }}
+
+        {% include footer/full.html %}
+    </body>
+</html>
+
+
+
