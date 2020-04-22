@@ -16,5 +16,8 @@ Imports:
     jsonlite,
     httr,
     dplyr,
-    magrittr
+    magrittr,
+    RSQLite,
+    DBI,
+    dbplyr
 RoxygenNote: 7.0.2
