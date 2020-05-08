@@ -2,9 +2,13 @@
 % Please edit documentation in R/database.R
 \name{create_table_reference_homes}
 \alias{create_table_reference_homes}
-\title{Create \code{reference_homes} table}
+\title{Create or overwrite the \code{reference_homes} table}
 \usage{
-create_table_reference_homes(conn = get_db_conn(), overwrite = TRUE)
+create_table_reference_homes(
+  homes = reference_homes,
+  conn = get_db_conn(),
+  overwrite = TRUE
+)
 }
 \arguments{
 \item{conn}{a database connection}
@@ -15,5 +19,5 @@ create_table_reference_homes(conn = get_db_conn(), overwrite = TRUE)
 the name of the table if data was successfully loaded
 }
 \description{
-Create \code{reference_homes} table
+Create or overwrite the \code{reference_homes} table
 }

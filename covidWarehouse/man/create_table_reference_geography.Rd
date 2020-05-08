@@ -2,19 +2,18 @@
 % Please edit documentation in R/database.R
 \name{create_table_reference_geography}
 \alias{create_table_reference_geography}
-\title{Title}
+\title{Create or overwrite \code{reference_geography} table}
 \usage{
 create_table_reference_geography(
   conn = get_db_conn(),
-  postcodes = NULL,
+  data = reference_geography,
   overwrite = TRUE
 )
 }
 \arguments{
 \item{conn}{a database connection}
 
-\item{postcodes}{a character vector of postcodes. If `NULL` (the default),
-data will be fetched from the `reference_homes` table.}
+\item{data}{a data frame, set to  `reference_geography` by default.}
 
 \item{overwrite}{whether to overwrite the `reference_geography` table.
 Default is `TRUE`.}
@@ -23,5 +22,5 @@ Default is `TRUE`.}
 
 }
 \description{
-Title
+Create or overwrite \code{reference_geography} table
 }
