@@ -55,6 +55,35 @@ create_table_reference_geography <- function(conn = get_db_conn(),
 
 }
 
+
+check_homes <- function(home_codes, call = NULL) {
+
+  if(!file.exists(file.path(getOption("fshc_files"), "reference_homes.rda"))) {
+    extract_reference_homes()
+  }
+  load(file.path(getOption("fshc_files"), "reference_homes.rda"))
+
+  unknown_home <- na.omit(unique(home_codes))
+  unknown_home <- unknown_home[which(!unknown_home %in% reference_homes$home_code)]
+
+  if(length(unknown_home)>0) {
+    warning(call, " home unknown to `reference homes`\n",
+            paste(unknown_home, collapse = ", "))
+  }
+
+  missing_home <- reference_homes$home_code[
+    which(!reference_homes$home_code %in% home_codes)
+    ]
+  if(length(missing_home)>0) {
+    warning(
+      "The following homes are missing",
+      if(!is.null(call)) paste0(" in ", call),
+      "\n", paste(missing_home, collapse = ", "))
+  }
+
+}
+
+
 #' Extract most recent flat files into R data objects
 #'
 #' @description Saves the most recent data into directory `getOption("fshc_files")`
@@ -90,23 +119,11 @@ extract_incidents <- function() {
   }
   incidents[which(incidents$age < 5), c("age", "date_of_birth")] <- NA
 
-  home_codes <- dplyr::distinct(reference_homes,
-                                home_code,
-                                home_name_datix)
-  home_codes <- dplyr::rename(home_codes, home_name = home_name_datix)
-  incidents <- dplyr::rename(incidents, home_name = home)
-
-  incidents <- dplyr::left_join(incidents, home_codes, by = "home_name")
-  incidents$staff_indicator <- !incidents$resident_encryptedid %in% residents$encrypted_id
-
-  incidents <- incidents %>%
-    dplyr::group_by(resident_encryptedid) %>%
-    dplyr::mutate(incident_rank = if_else(
-      is.na(resident_encryptedid) | staff_indicator,
-      NA_integer_,
-      dplyr::dense_rank(incident_date)
-    )) %>%
-    dplyr::ungroup()
+  incidents$resident_encryptedid <- dplyr::if_else(
+    is.na(incidents$resident_encryptedid),
+    paste0("MISSING_", incidents$incident_id),
+    incidents$resident_encryptedid
+  )
 
   type_codes <- data.frame(list(
     infection_covid_19_type_code = 1:5,
@@ -118,9 +135,92 @@ extract_incidents <- function() {
       'No symptoms, but team member is a carer for someone in high risk group')
   ))
   incidents <- merge(incidents, type_codes, all.x = TRUE)
+  # remove any accidental staff remaining
+  incidents <- dplyr::filter(incidents, infection_covid_19_type_code %in% 1:2)
+
+  home_codes <- dplyr::distinct(reference_homes,
+                                home_code,
+                                home_name_datix)
+  home_codes <- dplyr::rename(home_codes, home_name = home_name_datix)
+  incidents <- dplyr::rename(incidents, home_name = home)
+  incidents <- dplyr::mutate(
+    incidents,
+    home_name = dplyr::case_when(
+      home_name == "Brackenbed View" ~ "Pellon Manor",
+      home_name == "Gilmerton NCC" ~ "Gilmerton",
+      TRUE ~ home_name
+    ))
+
+  incidents <- dplyr::left_join(incidents, home_codes, by = "home_name")
+
+  if(any(is.na(incidents$home_code))) {
+    warning("incident home not known to `reference_homes`")
+  }
+
+  if(sum(is.na(incidents$home_name))) {
+    warning(
+      "home is missing in ",
+      as.character(sum(is.na(incidents$home_name))),
+      " incident reports")
+  }
+
+  # Ajudicate postive cases
+  incidents <- incidents %>%
+    dplyr::mutate(
+      infection_result_code =  dplyr::case_when(
+          is.na(infection_result) ~ NA_integer_,
+          grepl("neg", tolower(infection_result)) ~ 0L,
+          grepl("(pos)|(poistive)|(covid)", tolower(infection_result)) ~ 1L,
+          TRUE ~ NA_integer_
+        )
+      ) %>%
+    dplyr::mutate(
+      covid_tested = as.integer(!is.na(infection_result_code) |
+      !is.na(infection_covid_19_test_date) |
+      !infection_confirmed %in% c("Not tested", NA)),
+      covid_symptomatic = 1) %>%
+    dplyr::mutate(
+      covid_test_result = dplyr::case_when(
+        !is.na(infection_result_code) ~ infection_result_code,
+        infection_confirmed == "Yes - positive test result: confirmed case" ~ 1L,
+        infection_confirmed == "No - negative test result" ~ 0L,
+        TRUE ~ NA_integer_
+      )
+    ) %>%
+    dplyr::mutate(
+      covid_confirmed =  dplyr::case_when(
+        !is.na(covid_test_result) ~ as.integer(covid_test_result),
+        infection_covid_19_type_code == 2 ~ 1L,
+        TRUE ~ 0L)
+    ) %>%
+    dplyr::group_by(resident_encryptedid) %>%
+    dplyr::mutate(incident_rank = if_else(
+      is.na(resident_encryptedid),
+      NA_integer_,
+      dplyr::dense_rank(incident_date)
+    )) %>%
+    dplyr::mutate(
+      covid_first_symptomatic = min_non_missing(
+        if_else(covid_symptomatic == 1,
+                incident_date,
+                as.Date(NA))),
+      covid_first_confirmed = min_non_missing(
+        if_else(covid_confirmed == 1,
+                incident_date,
+                as.Date(NA)))
+    ) %>%
+    dplyr::mutate(
+      covid_ever_symptomatic = if_else(
+        is.na(covid_first_symptomatic),
+        0L,
+        as.integer(incident_date >= covid_first_symptomatic)),
+      covid_ever_confirmed = if_else(
+        is.na(covid_first_confirmed),
+        0L,
+        as.integer(incident_date >= covid_first_confirmed))) %>%
+    dplyr::ungroup()
 
   save(incidents, file = file.path(getOption("fshc_files"), "incidents.rda"))
-
 }
 
 #' @rdname extract_data
@@ -148,11 +248,24 @@ extract_residents <- function() {
   names(residents)[grep("status_", names(residents))] <- "status"
   residents$status <- trimws(residents$status)
 
+  check_homes(residents$home_id, call = "`residents`")
+
+  if(sum(is.na(residents$home_id))) {
+    warning(
+      "home is missing in ",
+      as.character(sum(is.na(residents$home_id))),
+      " residents records")
+  }
+
   save(residents, file = file.path(getOption("fshc_files"), "residents.rda"))
 }
 
 #' @rdname extract_data
 extract_occupancy <- function() {
+
+  if(!file.exists(file.path(getOption("fshc_files"), "reference_homes.rda"))) {
+    extract_reference_homes()
+  }
 
   occupancy_filepath <- list.files(getOption("FSHC_EXTRACTS_DIRECTORY"), full.names = T)
   occupancy_filepath <- grep(".csv$", occupancy_filepath, value = T)
@@ -176,6 +289,9 @@ extract_occupancy <- function() {
                   times = lubridate::dmy(gsub("x", "", names(occupancy)[2:ncol(occupancy)])))
   row.names(occupancy) <- NULL
 
+  check_homes(beds$home_code, call = "`beds`")
+  check_homes(occupancy$home_code, call = "`occupancy`")
+
   save(beds, file = file.path(getOption("fshc_files"), "beds.rda"))
   save(occupancy, file = file.path(getOption("fshc_files"), "occupancy.rda"))
 }
@@ -187,6 +303,10 @@ extract_reference_homes <- function() {
     paste0(getOption("FSHC_EXTRACTS_DIRECTORY"), "reference_2020-04-22.xlsx"),
     sheetName = "Homes", stringsAsFactors = F)
   names(reference_homes) <- gsub("[.]+", "_", tolower(names(reference_homes)))
+
+  reference_homes <- unique(reference_homes)
+  stopifnot(!any(duplicated(reference_homes$home_code)))
+
   save(reference_homes, file = file.path(getOption("fshc_files"), "reference_homes.rda"))
 
   postcodes <- unique(reference_homes$postcode)

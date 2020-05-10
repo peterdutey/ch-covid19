@@ -1,0 +1,35 @@
+digraph D {
+
+  infection_result_code [shape=box, label="(1)\ninfection_result_code"]
+
+  infection_result_missing [shape=diamond, label="infection_result"]
+  infection_result_missing_code [shape=circle, label="NA"]
+  infection_result_neg [shape=diamond, label="grepl(\"neg\", \ntolower(infection_result))"]
+  infection_result_neg_code [shape=circle, label="0"]
+  infection_result_pos [shape=diamond, label="grepl(\"(pos)|(covid)\", \ntolower(infection_result))"]
+  infection_result_pos_code [shape=circle, label="1"]
+
+  infection_result_code -> infection_result_missing
+  infection_result_missing -> infection_result_missing_code [label="MISSING"]
+  infection_result_missing -> infection_result_neg [label="NOT MISSING"]
+  infection_result_neg -> infection_result_pos [label="FALSE"]
+  infection_result_neg -> infection_result_neg_code [label="TRUE"]
+  infection_result_pos -> infection_result_pos_code [label="TRUE"]
+  infection_result_pos -> infection_result_missing_code [label="FALSE"]
+
+  covid_tested [shape=box, label="(2)\ncovid_tested"]
+  covid_tested_arm [shape=diamond, label="!is.na(infection_result_code)\n| !is.na(infection_covid_19_test_date)\n| !infection_confirmed %in% c(\"Not tested\", NA)"]
+
+  covid_tested_yes [shape=circle,label="1"]
+  covid_tested_no [shape=circle,label="0"]
+
+  covid_tested -> covid_tested_arm
+  covid_tested_arm -> covid_tested_yes [label="TRUE"]
+  covid_tested_arm -> covid_tested_no [label="FALSE"]
+
+
+  covid_symptomatic [shape=box, label="(3)\ncovid_symptomatic"]
+  covid_symptomatic_code [shape=circle,label="1"]
+  covid_symptomatic -> covid_symptomatic_code
+
+}

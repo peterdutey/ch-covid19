@@ -1,0 +1,35 @@
+digraph D {
+
+  covid_test_result [shape=box,label="(4)\ncovid_test_result"]
+  covid_test_result_infection_result_code [shape=box, label="infection_result_code"]
+  covid_test_result_0 [shape=circle,label="0"]
+  covid_test_result_1 [shape=circle,label="1"]
+  covid_test_result_NA [shape=circle,label="NA"]
+  covid_test_result_infection_result_code_NA [shape=diamond,label="infection_confirmed"]
+
+
+  covid_test_result -> covid_test_result_infection_result_code
+  covid_test_result_infection_result_code -> covid_test_result_0 [label="0"]
+  covid_test_result_infection_result_code -> covid_test_result_1 [label="1"]
+  covid_test_result_infection_result_code -> covid_test_result_infection_result_code_NA [label="MISSING"]
+  covid_test_result_infection_result_code_NA -> covid_test_result_1 [label="YES"]
+  covid_test_result_infection_result_code_NA -> covid_test_result_0 [label="NO"]
+  covid_test_result_infection_result_code_NA -> covid_test_result_NA [label="ELSE"]
+
+
+  covid_confirmed [shape=box, label="(5)\ncovid_confirmed"]
+  covid_confirmed_test_result [shape=diamond,label="covid_test_result"]
+  covid_confirmed_0 [shape=circle,label="0"]
+  covid_confirmed_1 [shape=circle,label="1"]
+  covid_confirmed_test_result_MISSING [shape=diamond,label="infection_covid_19_type"]
+
+
+  covid_confirmed -> covid_confirmed_test_result
+  covid_confirmed_test_result -> covid_confirmed_0 [label="0"]
+  covid_confirmed_test_result -> covid_confirmed_1 [label="1"]
+  covid_confirmed_test_result -> covid_confirmed_test_result_MISSING [label="NA"]
+  covid_confirmed_test_result_MISSING -> covid_confirmed_1 [label="CONFIRMED FORMAL\nCLINICAL DIAGNOSIS"]
+  covid_confirmed_test_result_MISSING -> covid_confirmed_0 [label="ELSE"]
+
+
+}

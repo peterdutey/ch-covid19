@@ -1,0 +1,75 @@
+---
+title: "Data quality report"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{validation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup, include = FALSE}
+library(summarytools)
+st_options(
+  headings = FALSE,
+  footnote = NA
+)
+source("../.Rprofile")
+devtools::load_all("..")
+extract_data()
+load_data()
+```
+
+
+This report is based on n=`r formatbm(nrow(incidents))` Datix reports of incidents dated up to `r format(max(incidents$incident_date), "%A%e %b %Y")`. Incidents relate to `r formatbm(dplyr::n_distinct(incidents$resident_encryptedid))` unique residents. 
+
+Incidents report were obtained from `r formatbm(dplyr::n_distinct(incidents$home_code))` care homes totalling `r formatbm(sum(beds[beds$year=="2020" & beds$home_code %in% unique(incidents$home_code), "beds"]))` beds. In 2020, Four Seasons Health Care comprises `r formatbm(dplyr::n_distinct(beds[beds$year=="2020", "home_code"]))` care homes with a total of `r formatbm(sum(beds[beds$year=="2020", "beds"]))` beds.
+
+
+## Classification of cases
+
+The incident classification is not wholly consistent, as illustrated in the tabulation below. Due to this, a reclassification algorithm is used.
+
+```{r }
+print(ctable(incidents$infection_confirmed, incidents$infection_covid_19_type, useNA = "always"), method = 'render')
+```
+
+### Algorithm
+
+The following algorithm is used to classify symptomatic, suspected, and test-confirmed cases from the Datix reports of COVID-19 infections.
+
+
+```{r echo=FALSE}
+DiagrammeR::grViz("../man/figure/case_classification_1.gv", width=700, height= 500)
+```
+
+```{r echo = FALSE}
+DiagrammeR::grViz("../man/figure/case_classification_2.gv", width=700, height= 400)
+```
+
+### Validation
+
+Data are tabulated below to evaluate the internal consistency of the rules set out in the previous section.
+
+The `infection_result` field provides information on test results which broadly agrees yet sometimes conflicts with the `infection_confirmed` classification of incidents. It is potentially more up to date although it is very sparsely populated.
+
+
+```{r}
+print(ctable(incidents$infection_covid_19_type, incidents$covid_confirmed, useNA = "always"), method = 'render')
+```
+
+```{r}
+print(ctable(incidents$infection_covid_19_type, incidents$covid_test_result, useNA = "always"), method = 'render')
+```
+
+```{r}
+print(ctable(incidents$infection_confirmed, incidents$covid_test_result, useNA = "always"), method = 'render')
+```
+
+
