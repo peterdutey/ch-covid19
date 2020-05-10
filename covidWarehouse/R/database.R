@@ -117,6 +117,9 @@ extract_incidents <- function() {
   for(i in grep("(_date)|(date_of)", names(incidents))){
     incidents[,i] <- lubridate::dmy(incidents[,i])
   }
+
+  stopifnot(!any(is.na(incidents$incident_date)))
+
   incidents[which(incidents$age < 5), c("age", "date_of_birth")] <- NA
 
   incidents$resident_encryptedid <- dplyr::if_else(
@@ -207,6 +210,10 @@ extract_incidents <- function() {
       covid_first_confirmed = min_non_missing(
         if_else(covid_confirmed == 1,
                 incident_date,
+                as.Date(NA))),
+      covid_first_positive = min_non_missing(
+        if_else(covid_test_result == 1,
+                incident_date,
                 as.Date(NA)))
     ) %>%
     dplyr::mutate(
@@ -217,7 +224,12 @@ extract_incidents <- function() {
       covid_ever_confirmed = if_else(
         is.na(covid_first_confirmed),
         0L,
-        as.integer(incident_date >= covid_first_confirmed))) %>%
+        as.integer(incident_date >= covid_first_confirmed)),
+      covid_ever_positive = if_else(
+        is.na(covid_first_positive),
+        0L,
+        as.integer(incident_date >= covid_first_positive)
+      )) %>%
     dplyr::ungroup()
 
   save(incidents, file = file.path(getOption("fshc_files"), "incidents.rda"))

@@ -11,3 +11,18 @@ test_that("min_non_missing", {
                lubridate::ymd("2020-05-08"))
   expect_equal(min_non_missing(c(as.Date(NA), as.Date(NA))), NA)
 })
+
+
+test_that("age_groups", {
+  expect_equal(cut_age_denary(102), "100-109 years")
+  expect_equal(cut_age_denary(150), NA_character_)
+
+  expect_equal(cut_age_quinary(102), "100-104 years")
+  expect_equal(cut_age_quinary(150), NA_character_)
+
+  expect_equal(cut_age_pentadecimal(102), "90-104 years")
+  expect_equal(cut_age_pentadecimal(150), NA_character_)
+
+
+
+})

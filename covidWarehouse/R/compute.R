@@ -1,5 +1,52 @@
 
+compute_age <- function(dob, date){
+  as.integer(trunc(lubridate::time_length(
+    lubridate::interval(dob, date)
+    , "year")))
+}
 
+cut_age_denary <- function(age) {
+  as.character(
+    cut(
+      x = age,
+      breaks = c(seq(0, 130, 10), 150),
+      include.lowest = FALSE,
+      right = FALSE,
+      labels = c(paste0(
+        seq(0, 129, 10), "-",
+        seq(9, 129, 10), " years"),
+        "130+ years")
+    ))
+}
+
+
+cut_age_quinary <- function(age) {
+  as.character(
+    cut(
+      x = age,
+      breaks = c(seq(0, 135, 5), 150),
+      include.lowest = FALSE,
+      right = FALSE,
+      labels = c(paste0(
+        seq(0, 130, 5), "-",
+        seq(4, 134, 5), " years"),
+        "135+ years")
+    ))
+}
+
+cut_age_pentadecimal <- function(age) {
+  as.character(
+    cut(
+      x = age,
+      breaks = c(seq(0, 135, 15), 150),
+      include.lowest = FALSE,
+      right = FALSE,
+      labels = c(paste0(
+        seq(0, 129, 15), "-",
+        seq(14, 135, 15), " years"),
+        "135+ years")
+    ))
+  }
 
 tbrounding <- function(x, places = 1){
   format(round(x, places), nsmall = places)
@@ -213,9 +260,26 @@ weekly_rate_tests <- function() {
 #' @export
 #' @importFrom lubridate %m+% %m-% days wday
 weekly_deduplicated_cases <- function() {
-  cases <- incidents %>%
+
+  restable <- dplyr::transmute(
+    residents,
+    resident_encryptedid = encrypted_id,
+    res_gender = dplyr::case_when(
+      gender == "F" ~ "Female",
+      gender == "M" ~ "Male",
+      TRUE ~ NA_character_
+    ),
+    res_dob = lubridate::dmy(dob)
+  ) %>% dplyr::distinct()
+
+  cases <-  dplyr::left_join(incidents, restable, by = "resident_encryptedid") %>%
+    dplyr::mutate(
+      gender = if_else(is.na(gender), res_gender, gender),
+      age = if_else(!is.na(date_of_birth), compute_age(date_of_birth, incident_date), age),
+    ) %>%
     dplyr::transmute(
       resident_encryptedid,
+      age_group = cut_age_pentadecimal(age),
       covid_symptomatic,
       covid_tested,
       covid_test_result,
@@ -226,33 +290,15 @@ weekly_deduplicated_cases <- function() {
       covid_ever_confirmed,
       incident_rank,
       infection_covid_19_type_code,
-      incident_date,
-      # if the test date is more than 7 days away from incident date, use the incident date
-      date_test = if_else(
-        abs(as.numeric(infection_covid_19_test_date - incident_date, unit = "days")) > 7,
-        incident_date,
-        infection_covid_19_test_date),
-      location = infection_covid_19_test_location,
-      # if the test result date is more than 7 days away from incident date, assume it's 2 days after test date
-      date_result = if_else(
-        as.numeric(infection_covid_19_test_result_date - infection_covid_19_test_date, unit = "days") > 7,
-        if_else(
-          abs(as.numeric(infection_covid_19_test_date - incident_date, unit = "days")) > 7,
-          incident_date,
-          infection_covid_19_test_date)  %m+%  days(2),
-        infection_covid_19_test_result_date),
-    ) %>%
-    mutate(week_starting =  get_monday_date(date_test)) %>%
-    dplyr::group_by(home_code, week_starting) %>%
+      incident_date
+      ) %>%
+    mutate(week_starting = get_monday_date(incident_date)) %>%
+    dplyr::group_by(week_starting) %>%
     dplyr::summarise(
-      first_cases = sum(incident_rank %in% c(NA, 1), na.rm = T),
-      total_cases = sum(covid_symptomatic),
-      suspected_cases = sum(covid_confirmed, na.rm = T),
-      tests_performed = sum(covid_tested, na.rm = T),
-      tests_performed_home = sum(covid_tested == 1 & location %in% c("Care home", NA)),
-      tests_performed_hospital_or_other = sum(covid_tested == 1 & !(location %in% c("Care home", NA))),
-      tests_reported = sum(covid_tested & !is.na(covid_test_result)),
-      tests_positive = sum(covid_test_result, na.rm = T)
+      first_symptomatic = sum(covid_first_symptomatic, na.rm = T),
+      first_suspected = sum(covid_first_confirmed, na.rm = T),
+      first_confirmed = sum(covid_first_positive),
+      total_symptomatic = sum(covid_ever_symptomatic, na.rm = T)
     )
 
   timespan <- list(
