@@ -9,12 +9,12 @@ cut_age_denary <- function(age) {
   as.character(
     cut(
       x = age,
-      breaks = c(seq(0, 130, 10), 150),
+      breaks = c(seq(30, 130, 10), 150),
       include.lowest = FALSE,
       right = FALSE,
       labels = c(paste0(
-        seq(0, 129, 10), "-",
-        seq(9, 129, 10), " years"),
+        seq(30, 129, 10), "-",
+        seq(39, 129, 10), " years"),
         "130+ years")
     ))
 }
@@ -24,12 +24,12 @@ cut_age_quinary <- function(age) {
   as.character(
     cut(
       x = age,
-      breaks = c(seq(0, 135, 5), 150),
+      breaks = c(seq(30, 135, 5), 150),
       include.lowest = FALSE,
       right = FALSE,
       labels = c(paste0(
-        seq(0, 130, 5), "-",
-        seq(4, 134, 5), " years"),
+        seq(30, 130, 5), "-",
+        seq(34, 134, 5), " years"),
         "135+ years")
     ))
 }
@@ -38,12 +38,12 @@ cut_age_pentadecimal <- function(age) {
   as.character(
     cut(
       x = age,
-      breaks = c(seq(0, 135, 15), 150),
+      breaks = c(seq(30, 135, 15), 150),
       include.lowest = FALSE,
       right = FALSE,
       labels = c(paste0(
-        seq(0, 129, 15), "-",
-        seq(14, 135, 15), " years"),
+        seq(30, 129, 15), "-",
+        seq(44, 135, 15), " years"),
         "135+ years")
     ))
   }
@@ -147,7 +147,7 @@ resident_days_approx <- function(residents_data = residents, time_span = get_tim
 #' Approximate presence in care home
 #'
 #' @param data a data frame containing varibles `date`, `original_admission_date`,
-#' `last_admission_date`, `last_discharge_date`, `date_end`, and `status`
+#' `last_admission_date`, `last_discharge_date`, and `status`
 #'
 #' @return a data.frame with an rday variable indicating whether the resident
 #' was in or out of the care me on the date contained in variable `date`
@@ -158,14 +158,14 @@ resident_days_approx_indicator <- function(data){
     if_else(date >= last_admission_date, 1L, 0L),
     if_else(last_discharge_date > last_admission_date |
               (last_discharge_date == last_admission_date & status != "In Home"),
-            # orig adm      last adm         last disch        now
-            # |-- -- -- -- --|----------------|                |
-            as.integer(between(date, original_admission_date, last_discharge_date)),
-            # orig adm      last disch       last adm          now
-            # |-- -- -- -- --|                |----------------|
+            # orig adm       last adm         last disch        now
+            # |--  --  --  --|----------------|                |
+            as.integer(data.table::between(date, original_admission_date, last_discharge_date)),
+            # orig adm       last disch       last adm          now
+            # |--  --  --  --|                |----------------|
             as.integer(
-              between(date, original_admission_date, last_discharge_date) |
-                between(date, last_admission_date, date_end)
+              data.table::between(date, original_admission_date, last_discharge_date) |
+                date >= last_admission_date
             ))
   ))
 }
@@ -272,13 +272,29 @@ weekly_deduplicated_cases <- function() {
     res_dob = lubridate::dmy(dob)
   ) %>% dplyr::distinct()
 
-  cases <-  dplyr::left_join(incidents, restable, by = "resident_encryptedid") %>%
+  cases <- dplyr::left_join(incidents, restable, by = "resident_encryptedid") %>%
     dplyr::mutate(
       gender = if_else(is.na(gender), res_gender, gender),
       age = if_else(!is.na(date_of_birth), compute_age(date_of_birth, incident_date), age),
-    ) %>%
+    )
+
+  cases_gender <- dplyr::select(cases, resident_encryptedid, gender) %>%
+    na.omit() %>%
+    dplyr::group_by(resident_encryptedid) %>%
+    dplyr::sample_n(size = 1)
+
+  cases_age <- dplyr::select(cases, resident_encryptedid, age) %>%
+    na.omit() %>%
+    dplyr::group_by(resident_encryptedid) %>%
+    dplyr::sample_n(size = 1)
+
+  cases <- cases %>%
+    dplyr::select(-age, -gender) %>%
+    dplyr::left_join(cases_age, by = ) %>%
+    dplyr::left_join(cases_gender) %>%
     dplyr::transmute(
       resident_encryptedid,
+      gender,
       age_group = cut_age_pentadecimal(age),
       covid_symptomatic,
       covid_tested,
@@ -287,18 +303,19 @@ weekly_deduplicated_cases <- function() {
       covid_first_symptomatic,
       covid_ever_symptomatic,
       covid_first_confirmed,
-      covid_ever_confirmed,
-      incident_rank,
+      covid_first_positive,
+      infection_covid_19_date_of_hospital_admission,
+      infection_covid_19_date_of_death,
       infection_covid_19_type_code,
-      incident_date
-      ) %>%
-    mutate(week_starting = get_monday_date(incident_date)) %>%
-    dplyr::group_by(week_starting) %>%
+      incident_date,
+      week_starting = get_monday_date(incident_date)) %>%
+    dplyr::group_by(week_starting, age_group, gender) %>%
     dplyr::summarise(
-      first_symptomatic = sum(covid_first_symptomatic, na.rm = T),
-      first_suspected = sum(covid_first_confirmed, na.rm = T),
-      first_confirmed = sum(covid_first_positive),
-      total_symptomatic = sum(covid_ever_symptomatic, na.rm = T)
+      first_symptomatic = sum(covid_first_symptomatic == incident_date, na.rm = T),
+      first_suspected = sum(covid_first_confirmed == incident_date, na.rm = T),
+      first_confirmed = sum(covid_first_positive == incident_date, na.rm = T),
+      hospitalised = sum(!is.na(infection_covid_19_date_of_hospital_admission)),
+      death = sum(!is.na(infection_covid_19_date_of_death))
     )
 
   timespan <- list(
@@ -314,24 +331,25 @@ weekly_deduplicated_cases <- function() {
   )
 
   # roll forward occupancy when missing
-  output <- merge(
-    get_time_series(timespan = timespan),
-    data.frame(home_code = reference_homes$home_code, stringsAsFactors = FALSE)) %>%
-    dplyr::left_join(occupancy, by = c("home_code", "week_ending")) %>%
-    dplyr::group_by(home_code) %>%
-    dplyr::mutate(occupancy_imputed = if_else(
-      is.na(occupancy),
-      dplyr::last(na.omit(occupancy), order_by = week_starting),
-      # dplyr::lag(occupancy, order_by = week_starting),
-      occupancy
-    ))
-
-  output <- dplyr::left_join(output, cases, by = c("week_starting", "home_code")) %>%
-    dplyr::group_by(home_code) %>%
+#   occupancy_national <- dplyr::group_by(occupancy, week_ending) %>%
+#     dplyr::summarise()
+# #
+  output <- get_time_series(timespan = timespan) #%>%
+  #   dplyr::left_join(occupancy_national, by = c("week_ending")) %>%
+  #   dplyr::mutate(occupancy_imputed = if_else(
+  #     is.na(occupancy),
+  #     dplyr::last(na.omit(occupancy), order_by = week_starting),
+  #     # dplyr::lag(occupancy, order_by = week_starting),
+  #     occupancy
+  #   ))
+#
+  output <- dplyr::left_join(output, cases, by = c("week_starting")) %>%
     dplyr::arrange(week_starting) %>%
     dplyr::mutate(
-      cases_cumulative = cumsum(if_else(is.na(first_cases), 0L, first_cases))) %>%
-    dplyr::ungroup()
+      age_group = if_else(is.na(age_group), "Unknown", age_group),
+      gender = if_else(is.na(gender), "Unknown", gender),
+      total_symptomatic = cumsum(if_else(is.na(first_symptomatic), 0L, first_symptomatic))
+      )
 
   output
 }
@@ -349,6 +367,10 @@ export_tables <- function() {
 
   write.csv(weekly_rate_tests(),
             file = file.path(getOption("fshc_files"), "rate_tests.csv"),
+            na = "", row.names = FALSE)
+
+  write.csv(weekly_deduplicated_cases(),
+            file = file.path(getOption("fshc_files"), "case_counts_week_age_sex.csv"),
             na = "", row.names = FALSE)
 
 

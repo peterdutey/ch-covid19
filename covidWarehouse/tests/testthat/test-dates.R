@@ -26,3 +26,21 @@ test_that("age_groups", {
 
 
 })
+
+
+test_that("resident bed day approximation", {
+  test_data <- dplyr::tribble(
+    ~date,       ~original_admission_date,~last_admission_date,~last_discharge_date,   ~status,
+    "2020-03-20",            "2019-04-18",        "2019-04-18",        "2019-04-20","Deceased",
+    "2020-03-20",            "2020-03-16",	      "2020-03-16",                  NA, "In Home",
+    "2020-03-20",            "2020-01-16",        "2020-01-16",                  NA, "In Home",
+    "2020-03-20",            "2018-11-12",        "2018-11-12",        "2020-01-01","Permanently Discharged",
+    "2020-03-20",            "2019-01-15",        "2019-09-02",                  NA,"Deceased",
+    "2019-03-20",            "2019-01-15",        "2019-09-02",                  NA,"Deceased",
+    "2020-03-20",            "2019-01-11",        "2019-02-21",        "2019-01-30", "In Home",
+    "2019-06-02",            "2019-02-19",        "2019-06-03",        "2019-06-01", "In Home"
+  )
+
+  expect_equal(resident_days_approx_indicator(test_data)$rday,
+               c(0, 1, 1, 0, 1, 0, 1, 0))
+})

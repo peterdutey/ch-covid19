@@ -259,6 +259,7 @@ extract_residents <- function() {
 
   names(residents)[grep("status_", names(residents))] <- "status"
   residents$status <- trimws(residents$status)
+  residents$admission_type <- trimws(residents$admission_type)
 
   check_homes(residents$home_id, call = "`residents`")
 

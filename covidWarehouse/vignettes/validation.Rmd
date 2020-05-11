@@ -72,4 +72,14 @@ print(ctable(incidents$infection_covid_19_type, incidents$covid_test_result, use
 print(ctable(incidents$infection_confirmed, incidents$covid_test_result, useNA = "always"), method = 'render')
 ```
 
+## Data quality
+
+### Demographic information
+
+Resident pseudoidentifiers were absent in `r sum(grepl("^MISSING", incidents$resident_encryptedid))` (`r tbrounding(mean(grepl("^MISSING", incidents$resident_encryptedid))*100)`%) of Datix incident reports. However, the pseudoidentifiers of a further `r sum(incidents$resident_encryptedid[which(!grepl("^MISSING", incidents$resident_encryptedid))] %in% unique(residents$encrypted_id))` reports (`r tbrounding(sum(incidents$resident_encryptedid[which(!grepl("^MISSING", incidents$resident_encryptedid))] %in% unique(residents$encrypted_id))/nrow(incidents)*100)`%) were could not be successfully linked to the residents database. In total, `r sum(is.na(incidents$age) & is.na(incidents$date_of_birth))` reports (`r tbrounding(mean(is.na(incidents$age) & is.na(incidents$date_of_birth))*100)`%) did not have any date of birth or age, and `r sum(is.na(incidents$gender))` reports (`r tbrounding(mean(is.na(incidents$gender))*100)`%) did not have sex recorded. 
+
+
+
+
+
 
