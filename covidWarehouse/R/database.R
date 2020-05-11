@@ -214,6 +214,10 @@ extract_incidents <- function() {
       covid_first_positive = min_non_missing(
         if_else(covid_test_result == 1,
                 incident_date,
+                as.Date(NA))),
+      covid_first_tested = min_non_missing(
+        if_else(covid_tested == 1,
+                incident_date,
                 as.Date(NA)))
     ) %>%
     dplyr::mutate(
@@ -229,6 +233,11 @@ extract_incidents <- function() {
         is.na(covid_first_positive),
         0L,
         as.integer(incident_date >= covid_first_positive)
+      ),
+      covid_ever_tested = if_else(
+        is.na(covid_first_tested),
+        0L,
+        as.integer(incident_date >= covid_first_tested)
       )) %>%
     dplyr::ungroup()
 
@@ -299,7 +308,8 @@ extract_occupancy <- function() {
   occupancy <- reshape(occupancy, direction = "long", idvar = "home_code",
                   varying = 2:ncol(occupancy), v.names = "occupancy", sep = "",
                   timevar = "week_ending",
-                  times = lubridate::dmy(gsub("x", "", names(occupancy)[2:ncol(occupancy)])))
+                  times = lubridate::dmy(gsub("x", "", names(occupancy)[2:ncol(occupancy)]))) %>%
+    dplyr::mutate(occupancy = dplyr::na_if(occupancy, -1))
   row.names(occupancy) <- NULL
 
   check_homes(beds$home_code, call = "`beds`")

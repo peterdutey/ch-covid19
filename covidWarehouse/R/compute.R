@@ -176,7 +176,7 @@ resident_days_approx_indicator <- function(data){
 #' @return
 #' @export
 #' @importFrom lubridate %m+% %m-% days wday
-weekly_rate_tests <- function() {
+table_weekly_rate_tests <- function() {
   tests <- incidents %>%
     dplyr::transmute(
       home_code,
@@ -294,6 +294,7 @@ weekly_deduplicated_cases <- function() {
     dplyr::left_join(cases_gender) %>%
     dplyr::transmute(
       resident_encryptedid,
+      home_code,
       gender,
       age_group = cut_age_pentadecimal(age),
       covid_symptomatic,
@@ -304,11 +305,19 @@ weekly_deduplicated_cases <- function() {
       covid_ever_symptomatic,
       covid_first_confirmed,
       covid_first_positive,
+      covid_first_tested,
       infection_covid_19_date_of_hospital_admission,
       infection_covid_19_date_of_death,
       infection_covid_19_type_code,
       incident_date,
-      week_starting = get_monday_date(incident_date)) %>%
+      week_starting = get_monday_date(incident_date))
+
+  cases
+}
+
+table_weekly_cases_age_sex <- function() {
+
+  cases <- weekly_deduplicated_cases() %>%
     dplyr::group_by(week_starting, age_group, gender) %>%
     dplyr::summarise(
       first_symptomatic = sum(covid_first_symptomatic == incident_date, na.rm = T),
@@ -331,9 +340,9 @@ weekly_deduplicated_cases <- function() {
   )
 
   # roll forward occupancy when missing
-#   occupancy_national <- dplyr::group_by(occupancy, week_ending) %>%
-#     dplyr::summarise()
-# #
+  #   occupancy_national <- dplyr::group_by(occupancy, week_ending) %>%
+  #     dplyr::summarise()
+  # #
   output <- get_time_series(timespan = timespan) #%>%
   #   dplyr::left_join(occupancy_national, by = c("week_ending")) %>%
   #   dplyr::mutate(occupancy_imputed = if_else(
@@ -342,36 +351,81 @@ weekly_deduplicated_cases <- function() {
   #     # dplyr::lag(occupancy, order_by = week_starting),
   #     occupancy
   #   ))
-#
+  #
   output <- dplyr::left_join(output, cases, by = c("week_starting")) %>%
     dplyr::arrange(week_starting) %>%
     dplyr::mutate(
       age_group = if_else(is.na(age_group), "Unknown", age_group),
       gender = if_else(is.na(gender), "Unknown", gender),
       total_symptomatic = cumsum(if_else(is.na(first_symptomatic), 0L, first_symptomatic))
-      )
+    )
+
+  output
+}
+
+table_weekly_cases_home <- function() {
+
+  cases <- weekly_deduplicated_cases() %>%
+    dplyr::group_by(home_code, week_starting) %>%
+    dplyr::summarise(
+      first_symptomatic = sum(covid_first_symptomatic == incident_date, na.rm = T),
+      first_suspected = sum(covid_first_confirmed == incident_date, na.rm = T),
+      first_confirmed = sum(covid_first_positive == incident_date, na.rm = T),
+      first_test = sum(covid_first_tested == incident_date, na.rm = T),
+      hospitalised = sum(!is.na(infection_covid_19_date_of_hospital_admission)),
+      death = sum(!is.na(infection_covid_19_date_of_death))
+    )
+
+  timespan <- list(
+    start = get_monday_date(
+      min(c(incidents$incident_date,
+            incidents$infection_covid_19_test_date),
+          na.rm = T)),
+    end = get_monday_date(min(
+      Sys.Date(),
+      max(c(incidents$incident_date,
+            incidents$infection_covid_19_test_result_date), na.rm = T)))
+    %m+% days(6)
+  )
+
+  beds2020 <- dplyr::filter(beds, year == "2020") %>%
+    dplyr::transmute(home_code,
+                     beds_2020 = beds)
+
+  output <- merge(
+    get_time_series(timespan = timespan),
+    dplyr::select(reference_homes, home_code, home_name_datix, home_name_clickview),
+    all = T
+    ) %>%
+    dplyr::left_join(occupancy) %>%
+    dplyr::group_by(home_code) %>%
+    dplyr::mutate(occupancy_imputed = if_else(
+      is.na(occupancy),
+      dplyr::last(na.omit(occupancy), order_by = week_starting),
+      # dplyr::lag(occupancy, order_by = week_starting),
+      occupancy
+    )) %>%
+    dplyr::ungroup() %>%
+    dplyr::left_join(beds2020)
+
+  output <- dplyr::left_join(output, cases, by = c("week_starting", "home_code"))
 
   output
 }
 
 
-#
-#•	Confirmed COVID-19 cases
-# •	Suspected COVID-19 cases
-# •	Hospital admissions (I don’t know if this will be differentiated into COVID-19/non COVID-19)
-# •	Deaths (COVID-19 versus non COVID-19 if available)
-
-
-
 export_tables <- function() {
 
-  write.csv(weekly_rate_tests(),
+  write.csv(table_weekly_rate_tests(),
             file = file.path(getOption("fshc_files"), "rate_tests.csv"),
             na = "", row.names = FALSE)
 
-  write.csv(weekly_deduplicated_cases(),
+  write.csv(table_weekly_cases_age_sex(),
             file = file.path(getOption("fshc_files"), "case_counts_week_age_sex.csv"),
             na = "", row.names = FALSE)
 
+  write.csv(table_weekly_cases_home(),
+            file = file.path(getOption("fshc_files"), "case_counts_week_care_home.csv"),
+            na = "", row.names = FALSE)
 
 }

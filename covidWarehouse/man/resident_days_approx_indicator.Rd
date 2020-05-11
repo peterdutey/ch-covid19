@@ -8,7 +8,7 @@ resident_days_approx_indicator(data)
 }
 \arguments{
 \item{data}{a data frame containing varibles `date`, `original_admission_date`,
-`last_admission_date`, `last_discharge_date`, `date_end`, and `status`}
+`last_admission_date`, `last_discharge_date`, and `status`}
 }
 \value{
 a data.frame with an rday variable indicating whether the resident
