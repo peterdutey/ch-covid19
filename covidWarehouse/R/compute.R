@@ -365,6 +365,17 @@ table_weekly_cases_age_sex <- function() {
 
 table_weekly_cases_home <- function() {
 
+  mdcounts <- new_cases %>%
+    dplyr::mutate(week_starting = get_monday_date(date)) %>%
+    dplyr::group_by(week_starting, home_code) %>%
+    dplyr::summarise(
+      tally_first_symptomatic = sum(new_symptomatic_home, na.rm = T) +
+        sum(new_symptomatic_hospital, na.rm = T),
+      tally_confirmed = sum(new_confirmed_home, na.rm = T) +
+        sum(new_confirmed_hospital, na.rm = T),
+      tally_deaths = sum(new_deaths_home, na.rm = T) + sum(new_deaths_hospital, na.rm = T)
+    )
+
   cases <- weekly_deduplicated_cases() %>%
     dplyr::group_by(home_code, week_starting) %>%
     dplyr::summarise(
@@ -408,7 +419,8 @@ table_weekly_cases_home <- function() {
     dplyr::ungroup() %>%
     dplyr::left_join(beds2020)
 
-  output <- dplyr::left_join(output, cases, by = c("week_starting", "home_code"))
+  output <- dplyr::left_join(output, cases, by = c("week_starting", "home_code")) %>%
+    dplyr::left_join(mdcounts, by = c("week_starting", "home_code"))
 
   output
 }

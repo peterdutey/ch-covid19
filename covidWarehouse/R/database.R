@@ -366,6 +366,47 @@ extract_reference_homes <- function() {
 }
 
 #' @rdname extract_data
+extract_tallies <- function() {
+
+
+  if(!file.exists(file.path(getOption("fshc_files"), "reference_homes.rda"))) {
+    extract_reference_homes()
+  }
+
+  files <- list.files(getOption("FSHC_EXTRACTS_DIRECTORY"), full.names = T)
+  new_filepath <- sort(grep("tally_new_cases.*csv$", files, value = T), decreasing = T)[1]
+  total_filepath <- sort(grep("tally_total_cases.*csv$", files, value = T), decreasing = T)[1]
+
+  new_cases <- read.csv(new_filepath, stringsAsFactors = F)
+  total_cases <- read.csv(total_filepath, stringsAsFactors = F)
+
+  names(new_cases) <- tolower(names(new_cases))
+  new_cases$date <- lubridate::dmy(new_cases$date)
+  new_cases$time <- lubridate::dmy_hm(new_cases$time)
+
+  names(total_cases) <- tolower(names(total_cases))
+  total_cases$date <- lubridate::dmy(total_cases$date)
+  total_cases$time <- lubridate::dmy_hm(total_cases$time)
+
+  # Merge Gilmerton NCC within 565	Gilmerton
+  # Rid of Holybourne Day Centre (closed)
+  total_cases$home_name[total_cases$home_code == "GIL"] <- "Gilmerton"
+  total_cases$home_code[total_cases$home_code == "GIL"] <- "565"
+  total_cases <- dplyr::filter(total_cases, home_code != "240")
+  new_cases$home_name[new_cases$home_code == "GIL"] <- "Gilmerton"
+  new_cases$home_code[new_cases$home_code == "GIL"] <- "565"
+  new_cases <- dplyr::filter(new_cases, home_code != "240")
+
+  check_homes(unique(total_cases$home_code))
+  check_homes(unique(new_cases$home_code))
+
+  save(total_cases, file = file.path(getOption("fshc_files"), "total_cases.rda"))
+  save(new_cases, file = file.path(getOption("fshc_files"), "new_cases.rda"))
+
+
+}
+
+#' @rdname extract_data
 extract_data <- function(reference_data = FALSE) {
   if(reference_data){
     extract_reference_homes()
@@ -373,6 +414,7 @@ extract_data <- function(reference_data = FALSE) {
   extract_occupancy()
   extract_residents()
   extract_incidents()
+  extract_tallies()
 }
 
 
@@ -391,7 +433,9 @@ load_data <- function() {
     "beds.rda",
     "occupancy.rda",
     "reference_geography.rda",
-    "reference_homes.rda"
+    "reference_homes.rda",
+    "new_cases.rda",
+    "total_cases.rda"
   )) {
     load(file.path(getOption("fshc_files"), file), envir = .GlobalEnv)
   }
