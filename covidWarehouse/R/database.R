@@ -106,7 +106,7 @@ extract_incidents <- function() {
   load(file.path(getOption("fshc_files"), "residents.rda"))
 
   incidents_filepath <- list.files(getOption("FSHC_EXTRACTS_DIRECTORY"), full.names = T)
-  incidents_filepath <- sort(grep("Datix", incidents_filepath, value = T), decreasing = T)[1]
+  incidents_filepath <- sort(grep("Datix Incidents", incidents_filepath, value = T), decreasing = T)[1]
   incidents_src <- read.csv(incidents_filepath,
                             stringsAsFactors = F,na.strings = "")
   names(incidents_src) <- tolower(names(incidents_src))
@@ -115,6 +115,7 @@ extract_incidents <- function() {
 
   incidents <- incidents_src
   for(i in grep("(_date)|(date_of)", names(incidents))){
+    incidents[,i] <- gsub("/2002$", "/2020", incidents[,i])
     incidents[,i] <- lubridate::dmy(incidents[,i])
   }
 
@@ -124,7 +125,7 @@ extract_incidents <- function() {
 
   incidents$resident_encryptedid <- dplyr::if_else(
     is.na(incidents$resident_encryptedid),
-    paste0("MISSING_", incidents$incident_id),
+    paste0("MISSING_", incidents$id),
     incidents$resident_encryptedid
   )
 
