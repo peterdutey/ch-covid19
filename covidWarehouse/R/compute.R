@@ -191,7 +191,7 @@ table_weekly_rate_tests <- function() {
       incident_date,
       # if the test date is more than 7 days away from incident date, use the incident date
       date_test = if_else(
-          abs(as.numeric(infection_covid_19_test_date - incident_date, unit = "days")) > 7,
+        is.na(infection_covid_19_test_date) | abs(as.numeric(infection_covid_19_test_date - incident_date, unit = "days")) > 7,
           incident_date,
           infection_covid_19_test_date),
       location = infection_covid_19_test_location,
@@ -208,7 +208,7 @@ table_weekly_rate_tests <- function() {
     dplyr::group_by(home_code, week_starting) %>%
     dplyr::summarise(
       first_cases = sum(incident_rank %in% c(NA, 1), na.rm = T),
-      total_cases = sum(covid_symptomatic),
+      total_cases = sum(covid_symptomatic, na.rm = T),
       suspected_cases = sum(covid_confirmed, na.rm = T),
       tests_performed = sum(covid_tested, na.rm = T),
       tests_performed_home = sum(covid_tested == 1 & location %in% c("Care home", NA)),
@@ -240,7 +240,8 @@ table_weekly_rate_tests <- function() {
       dplyr::last(na.omit(occupancy), order_by = week_starting),
       # dplyr::lag(occupancy, order_by = week_starting),
       occupancy
-    ))
+    )) %>%
+    dplyr::ungroup()
 
   output <- dplyr::left_join(output, tests, by = c("week_starting", "home_code")) %>%
     dplyr::group_by(home_code) %>%
