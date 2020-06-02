@@ -1,0 +1,90 @@
+---
+title: "R Notebook"
+runtime: shiny
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup, include = FALSE}
+library(summarytools)
+st_options(
+  headings = FALSE,
+  footnote = NA
+)
+source("../.Rprofile")
+devtools::load_all("..")
+extract_data()
+load_data()
+library(ggplot2)
+library(shiny)
+ch_data <- table_weekly_cases_home()
+
+```
+
+
+This report is based on `r formatbm(nrow(incidents))` Datix reports of incidents dated up to `r format(max(incidents$incident_date), "%A %e %b %Y")`. Incidents relate to `r formatbm(dplyr::n_distinct(incidents$resident_encryptedid))` unique residents. 
+
+Incidents report were obtained from `r formatbm(dplyr::n_distinct(incidents$home_code))` care homes totalling `r formatbm(sum(beds[beds$year=="2020" & beds$home_code %in% unique(incidents$home_code), "beds"]))` beds. In 2020, Four Seasons Health Care comprises `r formatbm(dplyr::n_distinct(beds[beds$year=="2020", "home_code"]))` care homes with a total of `r formatbm(sum(beds[beds$year=="2020", "beds"]))` beds.
+
+```{r, echo=FALSE}
+shinyApp(
+  
+  ui = fluidPage(
+    sliderInput("date_range", "Date range:",
+                min = min(ch_data$week_starting, na.rm = TRUE), 
+                max = max(ch_data$week_starting, na.rm = TRUE),
+                step = 7,
+                width = "100%",
+                value = as.Date(c("2020-05-11", "2020-05-25")),
+                timeFormat = "%Y-%m-%d"), 
+    fluidRow(
+      column(width = 6, plotOutput("funnelPlot1")),
+      column(width = 6, plotOutput("funnelPlot2"))
+      ),
+    fluidRow(
+      column(width = 6, plotOutput("funnelPlot3")),
+      column(width = 6, plotOutput("funnelPlot4"))
+    )
+  ),
+  
+  server = function(input, output) {
+ 
+    output$funnelPlot1 = renderPlot({
+      plot_funnel(dplyr::filter(ch_data, week_starting >= input$date_range[1] &  week_starting < input$date_range[2]),
+                  y = first_symptomatic, denom = occupancy_imputed,
+                  home_code = home_code, home_name = home_name_clickview) +
+        ggplot2::labs(title = "Symptomatic cases (Datix)") 
+    })
+    output$funnelPlot2 = renderPlot({
+      plot_funnel(dplyr::filter(ch_data, week_starting >= input$date_range[1] &  week_starting < input$date_range[2]),
+                  y = tally_first_symptomatic, denom = occupancy_imputed,
+                  home_code = home_code, home_name = home_name_clickview) +
+        ggplot2::labs(title = "Symptomatic cases (manager tallies)")
+    })
+    output$funnelPlot3 = renderPlot({
+      plot_funnel(dplyr::filter(ch_data, week_starting >= input$date_range[1] &  week_starting < input$date_range[2]),
+                  y = first_confirmed, denom = occupancy_imputed,
+                  home_code = home_code, home_name = home_name_clickview) +
+        ggplot2::labs(title = "Confirmed cases (Datix)")
+    })
+    output$funnelPlot4 = renderPlot({
+      plot_funnel(dplyr::filter(ch_data, week_starting >= input$date_range[1] &  week_starting < input$date_range[2]),
+                  y = tally_confirmed, denom = occupancy_imputed,
+                  home_code = home_code, home_name = home_name_clickview) +
+        ggplot2::labs(title = "Confirmed cases (manager tallies)")
+    })
+  },
+  
+  options = list(height = 1000)
+)
+```
+ 
+

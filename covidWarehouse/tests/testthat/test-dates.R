@@ -44,3 +44,9 @@ test_that("resident bed day approximation", {
   expect_equal(resident_days_approx_indicator(test_data)$rday,
                c(0, 1, 1, 0, 1, 0, 1, 0))
 })
+
+
+test_that("funnel control limits", {
+  funnel_cl <- funnel_poisson_control_limits(10, 100)
+  expect(funnel_cl(x = 100, .975), 17)
+})

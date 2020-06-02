@@ -29,7 +29,9 @@ Imports:
     lubridate,
     DiagrammeR,
     summarytools,
-    data.table
+    data.table,
+    rlang,
+    scales
 RoxygenNote: 7.0.2
 Suggests: 
     testthat (>= 2.1.0),

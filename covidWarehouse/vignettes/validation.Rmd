@@ -27,7 +27,7 @@ load_data()
 ```
 
 
-This report is based on n=`r formatbm(nrow(incidents))` Datix reports of incidents dated up to `r format(max(incidents$incident_date), "%A%e %b %Y")`. Incidents relate to `r formatbm(dplyr::n_distinct(incidents$resident_encryptedid))` unique residents. 
+This report is based on `r formatbm(nrow(incidents))` Datix reports of incidents dated up to `r format(max(incidents$incident_date), "%A %e %b %Y")`. Incidents relate to `r formatbm(dplyr::n_distinct(incidents$resident_encryptedid))` unique residents. 
 
 Incidents report were obtained from `r formatbm(dplyr::n_distinct(incidents$home_code))` care homes totalling `r formatbm(sum(beds[beds$year=="2020" & beds$home_code %in% unique(incidents$home_code), "beds"]))` beds. In 2020, Four Seasons Health Care comprises `r formatbm(dplyr::n_distinct(beds[beds$year=="2020", "home_code"]))` care homes with a total of `r formatbm(sum(beds[beds$year=="2020", "beds"]))` beds.
 
@@ -76,10 +76,61 @@ print(ctable(incidents$infection_confirmed, incidents$covid_test_result, useNA =
 
 ### Demographic information
 
-Resident pseudoidentifiers were absent in `r sum(grepl("^MISSING", incidents$resident_encryptedid))` (`r tbrounding(mean(grepl("^MISSING", incidents$resident_encryptedid))*100)`%) of Datix incident reports. However, the pseudoidentifiers of a further `r sum(incidents$resident_encryptedid[which(!grepl("^MISSING", incidents$resident_encryptedid))] %in% unique(residents$encrypted_id))` reports (`r tbrounding(sum(incidents$resident_encryptedid[which(!grepl("^MISSING", incidents$resident_encryptedid))] %in% unique(residents$encrypted_id))/nrow(incidents)*100)`%) were could not be successfully linked to the residents database. In total, `r sum(is.na(incidents$age) & is.na(incidents$date_of_birth))` reports (`r tbrounding(mean(is.na(incidents$age) & is.na(incidents$date_of_birth))*100)`%) did not have any date of birth or age, and `r sum(is.na(incidents$gender))` reports (`r tbrounding(mean(is.na(incidents$gender))*100)`%) did not have sex recorded. 
+Resident pseudoidentifiers were absent in `r sum(grepl("^MISSING", incidents$resident_encryptedid))` (`r tbrounding(mean(grepl("^MISSING", incidents$resident_encryptedid))*100)`%) of Datix incident reports. The pseudoidentifiers of a further `r sum(!incidents$resident_encryptedid[which(!grepl("^MISSING", incidents$resident_encryptedid))] %in% unique(residents$encrypted_id))` reports (`r tbrounding(sum(!incidents$resident_encryptedid[which(!grepl("^MISSING", incidents$resident_encryptedid))] %in% unique(residents$encrypted_id))/nrow(incidents)*100)`%) were could not be successfully linked to the residents database. In total, `r sum(is.na(incidents$age) & is.na(incidents$date_of_birth))` reports (`r tbrounding(mean(is.na(incidents$age) & is.na(incidents$date_of_birth))*100)`%) did not have any date of birth or age, and `r sum(is.na(incidents$gender))` reports (`r tbrounding(mean(is.na(incidents$gender))*100)`%) did not have sex recorded. 
 
 
 
+### Comparison of manager-reported tally counts with Datix-derived counts
+
+FSHC regional managers 
 
 
+```{r}
+library(ggplot2)
+ch_data <- table_weekly_cases_home()
+ch_data_all <- ch_data %>% 
+  dplyr::filter(week_starting <= "2020-05-04") %>% 
+  dplyr::group_by(home_code, home_name_datix, home_name_clickview) %>% 
+  dplyr::summarise(
+    resident_days = sum(occupancy_imputed, na.rm = T),
+    first_symptomatic = sum(first_symptomatic, na.rm = T),
+    tally_first_symptomatic = sum(tally_first_symptomatic, na.rm = T),
+    first_confirmed = sum(first_confirmed, na.rm = T),
+    tally_confirmed = sum(tally_confirmed, na.rm = T)
+  ) %>% 
+  dplyr::mutate(
+    home_code_lbl = if_else(tally_first_symptomatic>15, home_code, NA_character_),
+    home_code_lbl2 = if_else(tally_confirmed>15 | first_confirmed>10, home_code, NA_character_))
 
+ggplot(data = ch_data_all, aes(x = tally_first_symptomatic, y = first_symptomatic)) + 
+  geom_point() +
+  geom_text(aes(label = home_code_lbl), check_overlap = TRUE, 
+            nudge_x = .5,  nudge_y = 1, vjust = "outward", hjust = "outward") + 
+  geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
+  geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
+  xlab("Manager counts") + ylab("Datix-derived counts") + labs(title="Comparison of Datix and manager counts of symptomatic cases") +
+  scale_colour_manual(name="Line of fit",
+    values = c("Identity" = "black", "OLS" = "blue", "Spline" = "red")) +
+  scale_linetype_manual(name="Line of fit",
+    values = c("Identity" = "solid", "OLS" = "longdash", "Spline" = "dotted")) 
+ 
+  
+
+```
+
+
+```{r warning=TRUE}
+
+ggplot(data = ch_data_all, aes(x = tally_confirmed, y = first_confirmed)) + 
+  geom_point() +
+  geom_text(aes(label = home_code_lbl2), check_overlap = TRUE, 
+            nudge_x = .5,  nudge_y = 1, vjust = "outward", hjust = "outward") + 
+  geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
+  geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
+  xlab("Manager counts") + ylab("Datix-derived counts") + labs(title="Comparison of Datix and manager counts of confirmed cases") +
+  scale_colour_manual(name="Line of fit",
+    values = c("Identity" = "black", "OLS" = "blue", "Spline" = "red")) +
+  scale_linetype_manual(name="Line of fit",
+    values = c("Identity" = "solid", "OLS" = "longdash", "Spline" = "dotted")) 
+
+```
