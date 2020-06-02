@@ -84,16 +84,25 @@ plot_funnel <- function(data, y, denom, home_code, home_name) {
     dplyr::mutate(
       outlier95 = funnel_outlier(o = !!y, denom = !!denom,
                                  fun = conf_limit_fun, .95),
-      rate = !!y/!!denom
+      rate = !!y/!!denom,
+      observed_cases = !!y
+    ) %>%
+    dplyr::mutate(
+      rate_per_100000 = multiply_E5(rate)
     )
 
   ggplot2::ggplot(data, aes(x = !!denom, y = rate))  +
     ggplot2::scale_y_continuous(labels = multiply_E5) +
-    ggplot2::geom_point()  +
+    ggplot2::geom_point(aes(text = paste("care_home:", !!home_name),
+                            observed_cases = observed_cases,
+                            rate_per_100000 = rate_per_100000), shape = 3)  +
     ggplot2::geom_hline(aes(yintercept = overall_rate)) +
-    ggplot2::stat_function(col = "deepskyblue3", geom="line", fun = rlang::as_function("conf_limit_fun"), args = list(p = .95)) +
-    ggplot2::stat_function(col = "deepskyblue3", geom="line", fun = rlang::as_function("conf_limit_fun"), args = list(p = .05)) +
-    ggplot2::labs(x = "Total resident-days", y = "Rate per 100,000")
+    ggplot2::stat_function(col = "deepskyblue3", geom="line", fun = rlang::as_function("conf_limit_fun"), args = list(p = .975)) +
+    ggplot2::stat_function(col = "deepskyblue3", geom="line", fun = rlang::as_function("conf_limit_fun"), args = list(p = .025)) +
+    ggplot2::stat_function(col = "orangered4", geom="line", fun = rlang::as_function("conf_limit_fun"), args = list(p = .995)) +
+    ggplot2::stat_function(col = "orangered4", geom="line", fun = rlang::as_function("conf_limit_fun"), args = list(p = .005)) +
+    ggplot2::labs(x = "Total resident-days", y = "Rate per 100,000")  +
+    ggplot2::theme_bw() + ggplot2::theme(text = ggplot2::element_text(size = 14))
 
 }
 
