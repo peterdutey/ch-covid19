@@ -74,9 +74,14 @@ formatbm <- function(x){
 #' @return a vector
 #' @export
 min_non_missing <- function(x) {
+  date_input <- is(x, "Date")
   x <- na.omit(x)
   if(length(x)==0){
-    return(NA)
+    if(date_input){
+      return(as.Date(NA))
+    } else {
+      return(NA)
+    }
   } else {
     return(min(x))
   }
@@ -131,18 +136,91 @@ get_monday_date <- function(date) {
 }
 
 
+resident_timelines <- function(residents_data = residents,
+                               time_span = get_time_span()) {
+  # This function generates individual resident timelines on the basis of FSHC records
+  # of last admission and discharge dates. This is a mere approximation in the absence
+  # of actual records of all admissions and discharges
+  progress <- dplyr::progress_estimated(length(residents_data$resident_id))
 
+  output <- dplyr::group_by(residents_data, resident_id) %>%
+    tidyr::nest()
+  progress <- dplyr::progress_estimated(length(residents_data$resident_id))
 
-resident_days_approx <- function(residents_data = residents, time_span = get_time_span()) {
+  output <- output %>%
+    dplyr::mutate(timeline = purrr::map2(resident_id, data, function(resident_id, data){
 
-  rdays <- data.frame(list(date = seq(time_span$start, time_span$end, by = 1),
-                           date_end = time_span$end))
-  rdays <- merge(rdays, residents_data, all = TRUE)
-  rdays <- resident_days_approx_indicator(rdays)
+      progress$tick()$print()
 
-  rdays
+      # Eliminate records of multiple admissions - this is a processing error from FSHC,
+      # probably pseudonymisation problem
+      main_admissions <- dplyr::distinct(dplyr::filter(data, admission_type != "Respite")) %>%
+        dplyr::arrange(desc(last_discharge_date), desc(last_admission_date), desc(last_admission_date)) %>%
+        .[1,]
+
+      timeline <- data.frame(list(
+        resident_id = resident_id,
+        date = seq(time_span$start, time_span$end, by = 1),
+        date_end = time_span$end),
+        stringsAsFactors = FALSE)
+
+      timeline <- merge(
+        timeline,
+        main_admissions,
+        all = TRUE)
+
+      timeline <- resident_days_approx_indicator(timeline)
+
+      other_admissions <- dplyr::filter(data, admission_type == "Respite") %>%
+        # if missing, there are still marked as in home
+        # also, in every case where last discharge < last admission, their status is marked as in home.
+        dplyr::mutate(last_discharge_date = dplyr::case_when(
+          is.na(last_discharge_date) ~ time_span$end,
+          last_discharge_date < last_admission_date ~ time_span$end,
+          TRUE ~ last_discharge_date
+        ))
+
+      other_admissions_days <- lubridate::ymd(
+        unique(
+          unlist(purrr::map2(
+            other_admissions$last_admission_date,
+            other_admissions$last_discharge_date,
+            function(x, y){
+              as.character(seq(x, y, by = 1L))
+            }))
+        )
+      )
+
+      timeline[timeline$date %in% other_admissions_days, "rday"] <- 1
+
+      timeline
+    }))
+
+  output
 }
 
+resident_days_approx <- function(timelines = timelines, time_span = get_time_span()) {
+  # This function merges individual resident timelines and computes an approximation
+  # of daily occupancy for each care home
+
+  timeline <- dplyr::bind_rows(timelines$timeline)
+
+  duplic <- duplicated(timeline[,c("resident_id", "date")])
+
+  if(any(duplic)){
+    duplic <- dplyr::filter(timeline, resident_id %in% timeline$resident_id[which(duplic)])
+    print(duplic)
+    warning("Duplicated resident-days - please verify resident_days_approx()")
+  }
+
+  occup <- timeline %>%
+    dplyr::group_by(home_id, date, date_end) %>%
+    dplyr::summarise(
+      approx_occupancy = sum(rday, na.rm = T)
+    )
+
+  occup
+}
 
 #' Approximate presence in care home
 #'
@@ -153,7 +231,7 @@ resident_days_approx <- function(residents_data = residents, time_span = get_tim
 #' was in or out of the care me on the date contained in variable `date`
 #' @importFrom dplyr mutate if_else between
 resident_days_approx_indicator <- function(data){
-  mutate(data, rday = if_else(
+  dplyr::mutate(data, rday = if_else(
     is.na(last_discharge_date),
     if_else(date >= last_admission_date, 1L, 0L),
     if_else(last_discharge_date > last_admission_date |
@@ -264,7 +342,7 @@ weekly_deduplicated_cases <- function() {
 
   restable <- dplyr::transmute(
     residents,
-    resident_encryptedid = encrypted_id,
+    resident_id,
     res_gender = dplyr::case_when(
       gender == "F" ~ "Female",
       gender == "M" ~ "Male",
@@ -273,20 +351,20 @@ weekly_deduplicated_cases <- function() {
     res_dob = lubridate::dmy(dob)
   ) %>% dplyr::distinct()
 
-  cases <- dplyr::left_join(incidents, restable, by = "resident_encryptedid") %>%
+  cases <- dplyr::left_join(incidents, restable, by = "resident_id") %>%
     dplyr::mutate(
       gender = if_else(is.na(gender), res_gender, gender),
       age = if_else(!is.na(date_of_birth), compute_age(date_of_birth, incident_date), age),
     )
 
-  cases_gender <- dplyr::select(cases, resident_encryptedid, gender) %>%
+  cases_gender <- dplyr::select(cases, resident_id, gender) %>%
     na.omit() %>%
-    dplyr::group_by(resident_encryptedid) %>%
+    dplyr::group_by(resident_id) %>%
     dplyr::sample_n(size = 1)
 
-  cases_age <- dplyr::select(cases, resident_encryptedid, age) %>%
+  cases_age <- dplyr::select(cases, resident_id, age) %>%
     na.omit() %>%
-    dplyr::group_by(resident_encryptedid) %>%
+    dplyr::group_by(resident_id) %>%
     dplyr::sample_n(size = 1)
 
   cases <- cases %>%
@@ -294,7 +372,7 @@ weekly_deduplicated_cases <- function() {
     dplyr::left_join(cases_age, by = ) %>%
     dplyr::left_join(cases_gender) %>%
     dplyr::transmute(
-      resident_encryptedid,
+      resident_id,
       home_code,
       gender,
       age_group = cut_age_pentadecimal(age),

@@ -31,7 +31,7 @@ ch_data <- table_weekly_cases_home()
 ```
 
 
-This report is based on `r formatbm(nrow(incidents))` Datix reports of incidents dated up to `r format(max(incidents$incident_date), "%A %e %b %Y")`. Incidents relate to `r formatbm(dplyr::n_distinct(incidents$resident_encryptedid))` unique residents. 
+This report is based on `r formatbm(nrow(incidents))` Datix reports of incidents dated up to `r format(max(incidents$incident_date), "%A %e %b %Y")`. Incidents relate to `r formatbm(dplyr::n_distinct(incidents$resident_id))` unique residents. 
 
 Incidents report were obtained from `r formatbm(dplyr::n_distinct(incidents$home_code))` care homes totalling `r formatbm(sum(beds[beds$year=="2020" & beds$home_code %in% unique(incidents$home_code), "beds"]))` beds. In 2020, Four Seasons Health Care comprises `r formatbm(dplyr::n_distinct(beds[beds$year=="2020", "home_code"]))` care homes with a total of `r formatbm(sum(beds[beds$year=="2020", "beds"]))` beds.
 
@@ -50,7 +50,7 @@ shinyApp(
                 width = "100%",
                 value = as.Date(c("2020-05-11", "2020-05-25")),
                 timeFormat = "%Y-%m-%d"), 
-    h5("Funnel plots with 95% (blue) and 99% (orange) Poisson control limits"),
+    h4("Funnel plots with 95% (blue) and 99% (orange) Poisson control limits"),
     fluidRow(
       column(width = 6, plotlyOutput("funnelPlot1")),
       column(width = 6, plotlyOutput("funnelPlot2"))
@@ -59,7 +59,7 @@ shinyApp(
       column(width = 6, plotlyOutput("funnelPlot3")),
       column(width = 6, plotlyOutput("funnelPlot4"))
     ), br(),
-    h5("Comparison of Datix and manager counts"),
+    h4("Comparison of Datix and manager counts"),
     fluidRow(
       column(width = 6, plotlyOutput("validation_symptomatic")),
       column(width = 6, plotlyOutput("validation_confirmed"))

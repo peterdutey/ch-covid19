@@ -118,16 +118,18 @@ extract_incidents <- function() {
     incidents[,i] <- gsub("/2002$", "/2020", incidents[,i])
     incidents[,i] <- lubridate::dmy(incidents[,i])
   }
+  incidents <- dplyr::rename(incidents, resident_id = resident_encryptedid)
 
   stopifnot(!any(is.na(incidents$incident_date)))
 
   incidents[which(incidents$age < 5), c("age", "date_of_birth")] <- NA
 
-  incidents$resident_encryptedid <- dplyr::if_else(
-    is.na(incidents$resident_encryptedid),
+  incidents$resident_id <- dplyr::if_else(
+    is.na(incidents$resident_id),
     paste0("MISSING_", incidents$id),
-    incidents$resident_encryptedid
+    incidents$resident_id
   )
+
 
   type_codes <- data.frame(list(
     infection_covid_19_type_code = 1:5,
@@ -197,9 +199,9 @@ extract_incidents <- function() {
         infection_covid_19_type_code == 2 ~ 1L,
         TRUE ~ 0L)
     ) %>%
-    dplyr::group_by(resident_encryptedid) %>%
+    dplyr::group_by(resident_id) %>%
     dplyr::mutate(incident_rank = if_else(
-      is.na(resident_encryptedid),
+      is.na(resident_id),
       NA_integer_,
       dplyr::dense_rank(incident_date)
     )) %>%
@@ -243,6 +245,7 @@ extract_incidents <- function() {
     dplyr::ungroup()
 
   save(incidents, file = file.path(getOption("fshc_files"), "incidents.rda"))
+  usethis::ui_done("incidents.rda")
 }
 
 #' @rdname extract_data
@@ -270,6 +273,10 @@ extract_residents <- function() {
   names(residents)[grep("status_", names(residents))] <- "status"
   residents$status <- trimws(residents$status)
   residents$admission_type <- trimws(residents$admission_type)
+  residents$funding_type <- trimws(residents$funding_type)
+
+  residents <- dplyr::distinct(residents) %>%
+    dplyr::rename(resident_id = encrypted_id)
 
   check_homes(residents$home_id, call = "`residents`")
 
@@ -281,6 +288,7 @@ extract_residents <- function() {
   }
 
   save(residents, file = file.path(getOption("fshc_files"), "residents.rda"))
+  usethis::ui_done("residents.rda")
 }
 
 #' @rdname extract_data
@@ -306,18 +314,21 @@ extract_occupancy <- function() {
   row.names(beds) <- NULL
 
   occupancy <- dplyr::select(occupancy_src, home_code, dplyr::starts_with("x"))
+  # Multiply occupancy by 7 to get the total resident-days
   occupancy <- reshape(occupancy, direction = "long", idvar = "home_code",
                   varying = 2:ncol(occupancy), v.names = "occupancy", sep = "",
                   timevar = "week_ending",
                   times = lubridate::dmy(gsub("x", "", names(occupancy)[2:ncol(occupancy)]))) %>%
-    dplyr::mutate(occupancy = dplyr::na_if(occupancy, -1))
+    dplyr::mutate(occupancy = 7 * dplyr::na_if(occupancy, -1))
   row.names(occupancy) <- NULL
 
   check_homes(beds$home_code, call = "`beds`")
   check_homes(occupancy$home_code, call = "`occupancy`")
 
   save(beds, file = file.path(getOption("fshc_files"), "beds.rda"))
+  usethis::ui_done("beds.rda")
   save(occupancy, file = file.path(getOption("fshc_files"), "occupancy.rda"))
+  usethis::ui_done("occupancy.rda")
 }
 
 #' @rdname extract_data
@@ -364,11 +375,11 @@ extract_reference_homes <- function() {
   )]
 
   save(reference_geography, file = file.path(getOption("fshc_files"), "reference_geography.rda"))
+  usethis::ui_done("reference_geography.rda")
 }
 
 #' @rdname extract_data
 extract_tallies <- function() {
-
 
   if(!file.exists(file.path(getOption("fshc_files"), "reference_homes.rda"))) {
     extract_reference_homes()
@@ -402,9 +413,30 @@ extract_tallies <- function() {
   check_homes(unique(new_cases$home_code))
 
   save(total_cases, file = file.path(getOption("fshc_files"), "total_cases.rda"))
+  usethis::ui_done("total_cases.rda")
   save(new_cases, file = file.path(getOption("fshc_files"), "new_cases.rda"))
+  usethis::ui_done("new_cases.rda")
+}
 
+#' @rdname extract_data
+extract_timelines <- function(){
 
+  if(!file.exists(file.path(getOption("fshc_files"), "residents.rda"))) {
+    extract_residents()
+  }
+  load(file.path(getOption("fshc_files"), "residents.rda"))
+
+  if(!file.exists(file.path(getOption("fshc_files"), "incidents.rda"))) {
+    extract_incidents()
+  }
+  load(file.path(getOption("fshc_files"), "incidents.rda"))
+
+  timelines <- resident_timelines(
+    residents_data = residents,
+    time_span = get_time_span(data = incidents)
+  )
+  save(timelines, file = file.path(getOption("fshc_files"), "timelines.rda"))
+  usethis::ui_done("timelines.rda")
 }
 
 #' @rdname extract_data
@@ -416,6 +448,7 @@ extract_data <- function(reference_data = FALSE) {
   extract_residents()
   extract_incidents()
   extract_tallies()
+  extract_timelines()
 }
 
 
@@ -436,7 +469,8 @@ load_data <- function() {
     "reference_geography.rda",
     "reference_homes.rda",
     "new_cases.rda",
-    "total_cases.rda"
+    "total_cases.rda",
+    "timelines.rda"
   )) {
     load(file.path(getOption("fshc_files"), file), envir = .GlobalEnv)
   }

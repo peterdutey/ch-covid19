@@ -9,12 +9,13 @@ vignette: >
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
+  echo=FALSE,
+  fig.width = 7,
+  fig.height = 5,
   collapse = TRUE,
   comment = "#>"
 )
-```
 
-```{r setup, include = FALSE}
 library(summarytools)
 st_options(
   headings = FALSE,
@@ -22,12 +23,12 @@ st_options(
 )
 source("../.Rprofile")
 devtools::load_all("..")
-extract_data()
+library(ggplot2)
 load_data()
 ```
 
 
-This report is based on `r formatbm(nrow(incidents))` Datix reports of incidents dated up to `r format(max(incidents$incident_date), "%A %e %b %Y")`. Incidents relate to `r formatbm(dplyr::n_distinct(incidents$resident_encryptedid))` unique residents. 
+This report is based on `r formatbm(nrow(incidents))` Datix reports of incidents dated up to `r format(max(incidents$incident_date), "%A %e %b %Y")`. Incidents relate to `r formatbm(dplyr::n_distinct(incidents$resident_id))` unique residents. 
 
 Incidents report were obtained from `r formatbm(dplyr::n_distinct(incidents$home_code))` care homes totalling `r formatbm(sum(beds[beds$year=="2020" & beds$home_code %in% unique(incidents$home_code), "beds"]))` beds. In 2020, Four Seasons Health Care comprises `r formatbm(dplyr::n_distinct(beds[beds$year=="2020", "home_code"]))` care homes with a total of `r formatbm(sum(beds[beds$year=="2020", "beds"]))` beds.
 
@@ -76,9 +77,70 @@ print(ctable(incidents$infection_confirmed, incidents$covid_test_result, useNA =
 
 ### Demographic information
 
-Resident pseudoidentifiers were absent in `r sum(grepl("^MISSING", incidents$resident_encryptedid))` (`r tbrounding(mean(grepl("^MISSING", incidents$resident_encryptedid))*100)`%) of Datix incident reports. The pseudoidentifiers of a further `r sum(!incidents$resident_encryptedid[which(!grepl("^MISSING", incidents$resident_encryptedid))] %in% unique(residents$encrypted_id))` reports (`r tbrounding(sum(!incidents$resident_encryptedid[which(!grepl("^MISSING", incidents$resident_encryptedid))] %in% unique(residents$encrypted_id))/nrow(incidents)*100)`%) were could not be successfully linked to the residents database. In total, `r sum(is.na(incidents$age) & is.na(incidents$date_of_birth))` reports (`r tbrounding(mean(is.na(incidents$age) & is.na(incidents$date_of_birth))*100)`%) did not have any date of birth or age, and `r sum(is.na(incidents$gender))` reports (`r tbrounding(mean(is.na(incidents$gender))*100)`%) did not have sex recorded. 
+Resident pseudoidentifiers were absent in `r sum(grepl("^MISSING", incidents$resident_id))` (`r tbrounding(mean(grepl("^MISSING", incidents$resident_id))*100)`%) of Datix incident reports. The pseudoidentifiers of a further `r sum(!incidents$resident_id[which(!grepl("^MISSING", incidents$resident_id))] %in% unique(residents$resident_id))` reports (`r tbrounding(sum(!incidents$resident_id[which(!grepl("^MISSING", incidents$resident_id))] %in% unique(residents$resident_id))/nrow(incidents)*100)`%) were could not be successfully linked to the residents database. In total, `r sum(is.na(incidents$age) & is.na(incidents$date_of_birth))` reports (`r tbrounding(mean(is.na(incidents$age) & is.na(incidents$date_of_birth))*100)`%) did not have any date of birth or age, and `r sum(is.na(incidents$gender))` reports (`r tbrounding(mean(is.na(incidents$gender))*100)`%) did not have sex recorded. 
 
+### Occupancy
 
+Care home resident days are available from two sources:
+
+- weekly home occupancy reports provided by FSHC
+- individual-level resident records of last admission and discharge processing
+
+The plots below compare both measures at the care-home level and FSHC overall.
+
+```{r,  fig.cap = "Weekly total resident-days per care home"}
+approx_occupancy <- resident_days_approx(timelines = timelines,
+                                         time_span = get_time_span()
+                                        ) %>% 
+  dplyr::rename(home_code = home_id) %>% 
+  dplyr::mutate(
+    week_ending = get_monday_date(date) %m+% days(6)
+  ) %>% 
+  dplyr::group_by(home_code, week_ending) %>% 
+  dplyr::summarise(
+    approx_occupancy = sum(approx_occupancy)
+  )
+
+occ_home <- merge(
+  approx_occupancy,
+  occupancy,
+  all = FALSE
+)  
+
+occ_global <- occ_home %>% 
+  dplyr::group_by(week_ending) %>% 
+  dplyr::summarise(
+    approx_occupancy = sum(approx_occupancy, na.rm = T),
+    occupancy = sum(occupancy, na.rm = T)
+  ) 
+
+ggplot(occ_home, aes(x = occupancy, y = approx_occupancy)) +
+  geom_point() +
+   geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
+  geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
+  xlab("Resident-days provided by FSHC") +
+  ylab("Resident-days approximated\nfrom resident records") +
+  ggtitle(paste0("Weekly total resident-days by care home (L=", dplyr::n_distinct(occ_home$home_code), ")")) +
+  scale_colour_manual(name="Line of fit",
+    values = c("Identity" = "black", "OLS" = "blue", "Spline" = "red")) +
+  scale_linetype_manual(name="Line of fit",
+    values = c("Identity" = "solid", "OLS" = "longdash", "Spline" = "dotted")) 
+ 
+```
+```{r, fig.cap = "Weekly total resident-days"}
+
+ggplot(occ_global, aes(x = occupancy, y = approx_occupancy)) +
+  geom_point() +
+   geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
+  geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
+  xlab("Resident-days provided by FSHC") +
+  ylab("Resident-days approximated from resident records") +
+  ggtitle("Weekly total resident-days across FSHC") +
+  scale_colour_manual(name="Line of fit",
+    values = c("Identity" = "black", "OLS" = "blue", "Spline" = "red")) +
+  scale_linetype_manual(name="Line of fit",
+    values = c("Identity" = "solid", "OLS" = "longdash", "Spline" = "dotted")) 
+```
 
 ### Comparison of manager-reported tally counts with Datix-derived counts
 
@@ -86,7 +148,6 @@ FSHC regional managers
 
 
 ```{r}
-library(ggplot2)
 ch_data <- table_weekly_cases_home()
 ch_data_all <- ch_data %>% 
   dplyr::filter(week_starting <= "2020-05-04") %>% 
