@@ -6,7 +6,7 @@ compute_age <- function(dob, date){
 }
 
 cut_age_denary <- function(age) {
-  as.character(
+  # as.character(
     cut(
       x = age,
       breaks = c(seq(30, 130, 10), 150),
@@ -16,7 +16,7 @@ cut_age_denary <- function(age) {
         seq(30, 129, 10), "-",
         seq(39, 129, 10), " years"),
         "130+ years")
-    ))
+    )#)
 }
 
 
@@ -137,25 +137,43 @@ get_monday_date <- function(date) {
 
 
 resident_timelines <- function(residents_data = residents,
+                               incidents_data = incidents,
                                time_span = get_time_span()) {
   # This function generates individual resident timelines on the basis of FSHC records
   # of last admission and discharge dates. This is a mere approximation in the absence
   # of actual records of all admissions and discharges
   progress <- dplyr::progress_estimated(length(residents_data$resident_id))
 
+  incidents_data <- dplyr::group_by(incidents_data, resident_id) %>%
+    dplyr::summarise(
+      covid_first_positive = min_non_missing(covid_first_positive),
+      covid_death = min_non_missing(infection_covid_19_date_of_death)
+    )
+
   output <- dplyr::group_by(residents_data, resident_id) %>%
-    tidyr::nest()
+    tidyr::nest() %>%
+    dplyr::left_join(incidents_data)
+
   progress <- dplyr::progress_estimated(length(residents_data$resident_id))
 
   output <- output %>%
-    dplyr::mutate(timeline = purrr::map2(resident_id, data, function(resident_id, data){
+    dplyr::mutate(
+      timeline = purrr::pmap(list(resident_id,
+                                  data,
+                                  covid_first_positive,
+                                  covid_death),
+                             function(resident_id,
+                                      data,
+                                      covid_first_positive,
+                                      covid_death){
 
       progress$tick()$print()
 
       # Eliminate records of multiple admissions - this is a processing error from FSHC,
       # probably pseudonymisation problem
-      main_admissions <- dplyr::distinct(dplyr::filter(data, admission_type != "Respite")) %>%
-        dplyr::arrange(desc(last_discharge_date), desc(last_admission_date), desc(last_admission_date)) %>%
+      main_admissions <- dplyr::distinct(data) %>%
+        dplyr::mutate(admission_type2 = as.integer(admission_type != "Respite")) %>%
+        dplyr::arrange(desc(admission_type2), desc(last_discharge_date), desc(last_admission_date), desc(last_admission_date)) %>%
         .[1,]
 
       timeline <- data.frame(list(
@@ -168,8 +186,6 @@ resident_timelines <- function(residents_data = residents,
         timeline,
         main_admissions,
         all = TRUE)
-
-      timeline <- resident_days_approx_indicator(timeline)
 
       other_admissions <- dplyr::filter(data, admission_type == "Respite") %>%
         # if missing, there are still marked as in home
@@ -193,17 +209,33 @@ resident_timelines <- function(residents_data = residents,
 
       timeline[timeline$date %in% other_admissions_days, "rday"] <- 1
 
+
+      timeline <- resident_days_approx_indicator(timeline) %>%
+        dplyr::mutate(
+          rday = dplyr::case_when(
+            date > covid_death ~ 0L,
+            TRUE ~ rday
+          ),
+          susceptible = 1L
+        ) %>%
+        dplyr::mutate(
+          susceptible = dplyr::case_when(
+            rday == 0 ~ 0L,
+            date > covid_first_positive ~ 0L,
+            TRUE ~ susceptible
+          ))
+
       timeline
     }))
 
   output
 }
 
-resident_days_approx <- function(timelines = timelines, time_span = get_time_span()) {
+resident_days_approx <- function(timelines_data = timelines, time_span = get_time_span()) {
   # This function merges individual resident timelines and computes an approximation
   # of daily occupancy for each care home
 
-  timeline <- dplyr::bind_rows(timelines$timeline)
+  timeline <- dplyr::bind_rows(timelines_data$timeline)
 
   duplic <- duplicated(timeline[,c("resident_id", "date")])
 

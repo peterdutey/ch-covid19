@@ -433,6 +433,7 @@ extract_timelines <- function(){
 
   timelines <- resident_timelines(
     residents_data = residents,
+    incidents_data = incidents,
     time_span = get_time_span(data = incidents)
   )
   save(timelines, file = file.path(getOption("fshc_files"), "timelines.rda"))
