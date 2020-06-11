@@ -303,6 +303,12 @@ extract_occupancy <- function() {
   occupancy_filepath <- sort(grep("[wW]eekly [Oo]cc", occupancy_filepath, value = T), decreasing = T)[1]
   occupancy_src <- read.csv(occupancy_filepath,
                             stringsAsFactors = F,na.strings = "")
+
+  cbeds <- read.csv(file.path(getOption("FSHC_EXTRACTS_DIRECTORY"),
+                              "2020-06-10 Contract beds by home.csv"),
+                    stringsAsFactors = F)
+  cbeds$year <- "2020"
+
   names(occupancy_src) <- tolower(names(occupancy_src))
   names(occupancy_src) <- gsub("[.]+", "_", names(occupancy_src))
 
@@ -310,7 +316,8 @@ extract_occupancy <- function() {
   beds <- reshape(beds, direction = "long", idvar = "home_code",
             varying = 2:ncol(beds), v.names = "beds", sep = "_",
             timevar = "year",
-            times = gsub("beds_", "", names(beds)[2:ncol(beds)]))
+            times = gsub("beds_", "", names(beds)[2:ncol(beds)])) %>%
+    merge(cbeds, all.x = T)
   row.names(beds) <- NULL
 
   occupancy <- dplyr::select(occupancy_src, home_code, dplyr::starts_with("x"))
@@ -319,7 +326,11 @@ extract_occupancy <- function() {
                   varying = 2:ncol(occupancy), v.names = "occupancy", sep = "",
                   timevar = "week_ending",
                   times = lubridate::dmy(gsub("x", "", names(occupancy)[2:ncol(occupancy)]))) %>%
-    dplyr::mutate(occupancy = 7 * dplyr::na_if(occupancy, -1))
+    dplyr::mutate(occupancy = dplyr::na_if(occupancy, -1)) %>%
+    dplyr::group_by(home_code) %>%
+    dplyr::mutate(last_occupancy = dplyr::lag(occupancy, order_by = week_ending)) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(resident_days = (occupancy + last_occupancy) * 7 / 2)
   row.names(occupancy) <- NULL
 
   check_homes(beds$home_code, call = "`beds`")
