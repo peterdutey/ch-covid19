@@ -170,21 +170,49 @@ extract_incidents <- function() {
       " incident reports")
   }
 
+  # symptoms
+  ref_symptoms <- reference_symptoms()
+  incidents$infection_covid_19_symptoms <- tolower(
+    incidents$infection_covid_19_symptoms
+  )
+
+  unique_symptoms <- incidents$infection_covid_19_symptoms %>%
+    na.omit %>%
+    unique %>%
+    strsplit(", ") %>% unlist %>% unique
+
+  if(!all(unique_symptoms %in% ref_symptoms$symptom_description)){
+    stop("Undefined symptoms found in incidents dataset")
+  }
+
+  for(i in 1:(nrow(ref_symptoms) - 1)) {
+    incidents[[paste0("s_", ref_symptoms$symptom_name[i])]] <-
+      as.integer(
+        grepl(ref_symptoms$symptom_description[i],
+              incidents$infection_covid_19_symptoms)
+      )
+  }
+
+  incidents$s_asymptomatic <- as.integer(incidents$infection_covid_19_symptoms == "no symptoms")
+
   # Ajudicate postive cases
   incidents <- incidents %>%
     dplyr::mutate(
       infection_result_code =  dplyr::case_when(
-          is.na(infection_result) ~ NA_integer_,
-          grepl("neg", tolower(infection_result)) ~ 0L,
-          grepl("(pos)|(poistive)|(covid)", tolower(infection_result)) ~ 1L,
-          TRUE ~ NA_integer_
-        )
-      ) %>%
+        is.na(infection_result) ~ NA_integer_,
+        grepl("neg", tolower(infection_result)) ~ 0L,
+        grepl("(pos)|(poistive)|(covid)", tolower(infection_result)) ~ 1L,
+        TRUE ~ NA_integer_
+      )
+    ) %>%
     dplyr::mutate(
       covid_tested = as.integer(!is.na(infection_result_code) |
-      !is.na(infection_covid_19_test_date) |
-      !infection_confirmed %in% c("Not tested", NA)),
-      covid_symptomatic = 1) %>%
+                                  !is.na(infection_covid_19_test_date) |
+                                  !infection_confirmed %in% c("Not tested", NA)),
+      covid_symptomatic = dplyr::case_when(
+        s_asymptomatic == 1 ~ 0L,
+        TRUE ~ 1L
+      )) %>%
     dplyr::mutate(
       covid_test_result = dplyr::case_when(
         !is.na(infection_result_code) ~ infection_result_code,
@@ -351,6 +379,7 @@ extract_reference_homes <- function() {
   names(reference_homes) <- gsub("[.]+", "_", tolower(names(reference_homes)))
 
   reference_homes <- unique(reference_homes)
+  reference_homes[reference_homes$postcode=="BA13 3JD", "postcode"] <- "BA13 3JH"
   stopifnot(!any(duplicated(reference_homes$home_code)))
 
   save(reference_homes, file = file.path(getOption("fshc_files"), "reference_homes.rda"))
@@ -489,3 +518,28 @@ load_data <- function() {
 }
 
 
+reference_symptoms <- function(){
+  dplyr::tibble(
+    symptom_name = c(
+      "cough",
+      "sore_throat",
+      "nasal",
+      "wheezing",
+      "short_breath",
+      "hoarse",
+      "fever",
+      "other",
+      "asymptomatic"
+    ),
+    symptom_description = c(
+      "cough - new & persistent (with or without sputum)",
+      "sore throat",
+      "nasal congestion or discharge",
+      "wheezing",
+      "shortness of breath",
+      "hoarseness",
+      "fever (temp 37.8°c or above)",
+      "other symptoms not listed",
+      "no symptoms"
+    ))
+}

@@ -248,7 +248,7 @@ resident_days_approx <- function(timelines_data = timelines, time_span = get_tim
   occup <- timeline %>%
     dplyr::group_by(home_id, date, date_end) %>%
     dplyr::summarise(
-      approx_occupancy = sum(rday, na.rm = T)
+      approx_resident_days = sum(rday, na.rm = T)
     )
 
   occup
@@ -348,9 +348,13 @@ table_weekly_rate_tests <- function() {
     dplyr::mutate(occupancy_imputed = if_else(
       is.na(occupancy),
       dplyr::last(na.omit(occupancy), order_by = week_starting),
-      # dplyr::lag(occupancy, order_by = week_starting),
       occupancy
-    )) %>%
+    ),
+    resident_days_imputed = if_else(
+      is.na(resident_days),
+      dplyr::last(na.omit(resident_days), order_by = week_starting),
+      resident_days
+    ) ) %>%
     dplyr::ungroup()
 
   output <- dplyr::left_join(output, tests, by = c("week_starting", "home_code")) %>%
@@ -450,19 +454,8 @@ table_weekly_cases_age_sex <- function() {
     %m+% days(6)
   )
 
-  # roll forward occupancy when missing
-  #   occupancy_national <- dplyr::group_by(occupancy, week_ending) %>%
-  #     dplyr::summarise()
-  # #
   output <- get_time_series(timespan = timespan) #%>%
-  #   dplyr::left_join(occupancy_national, by = c("week_ending")) %>%
-  #   dplyr::mutate(occupancy_imputed = if_else(
-  #     is.na(occupancy),
-  #     dplyr::last(na.omit(occupancy), order_by = week_starting),
-  #     # dplyr::lag(occupancy, order_by = week_starting),
-  #     occupancy
-  #   ))
-  #
+
   output <- dplyr::left_join(output, cases, by = c("week_starting")) %>%
     dplyr::arrange(week_starting) %>%
     dplyr::mutate(
@@ -480,11 +473,17 @@ table_weekly_cases_home <- function() {
     dplyr::mutate(week_starting = get_monday_date(date)) %>%
     dplyr::group_by(week_starting, home_code) %>%
     dplyr::summarise(
-      tally_first_symptomatic = sum(new_symptomatic_home, na.rm = T) +
-        sum(new_symptomatic_hospital, na.rm = T),
-      tally_confirmed = sum(new_confirmed_home, na.rm = T) +
-        sum(new_confirmed_hospital, na.rm = T),
-      tally_deaths = sum(new_deaths_home, na.rm = T) + sum(new_deaths_hospital, na.rm = T)
+      tally_first_symptomatic = sum(new_symptomatic_home, na.rm = T)
+      # removed 2020/06/12 - seems to
+      # fit the data better without hospital cases
+      # + sum(new_symptomatic_hospital, na.rm = T)
+      ,
+      tally_confirmed = sum(new_confirmed_home, na.rm = T)
+      # removed 2020/06/12 - seems to
+      # fit the data better without hospital cases
+      # + sum(new_confirmed_hospital, na.rm = T)
+      ,
+      tally_deaths = sum(new_deaths_home, na.rm = T) # + sum(new_deaths_hospital, na.rm = T)
     )
 
   cases <- weekly_deduplicated_cases() %>%
@@ -524,9 +523,13 @@ table_weekly_cases_home <- function() {
     dplyr::mutate(occupancy_imputed = if_else(
       is.na(occupancy),
       dplyr::last(na.omit(occupancy), order_by = week_starting),
-      # dplyr::lag(occupancy, order_by = week_starting),
       occupancy
-    )) %>%
+    ),
+    resident_days_imputed = if_else(
+      is.na(resident_days),
+      dplyr::last(na.omit(resident_days), order_by = week_starting),
+      resident_days
+    ) ) %>%
     dplyr::ungroup() %>%
     dplyr::left_join(beds2020)
 

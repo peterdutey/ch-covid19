@@ -1,0 +1,19 @@
+digraph D {
+
+
+  covid_confirmed [shape=box, label="(5)\ncovid_confirmed"]
+  covid_confirmed_test_result [shape=diamond,label="covid_test_result"]
+  covid_confirmed_0 [shape=circle,label="0"]
+  covid_confirmed_1 [shape=circle,label="1"]
+  covid_confirmed_test_result_MISSING [shape=diamond,label="infection_covid_19_type"]
+
+
+  covid_confirmed -> covid_confirmed_test_result
+  covid_confirmed_test_result -> covid_confirmed_0 [label="0"]
+  covid_confirmed_test_result -> covid_confirmed_1 [label="1"]
+  covid_confirmed_test_result -> covid_confirmed_test_result_MISSING [label="NA"]
+  covid_confirmed_test_result_MISSING -> covid_confirmed_1 [label="CONFIRMED FORMAL\nCLINICAL DIAGNOSIS"]
+  covid_confirmed_test_result_MISSING -> covid_confirmed_0 [label="ELSE"]
+
+
+}

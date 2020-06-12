@@ -55,6 +55,11 @@ DiagrammeR::grViz("../man/figure/case_classification_1.gv", width=700, height= 5
 DiagrammeR::grViz("../man/figure/case_classification_2.gv", width=700, height= 400)
 ```
 
+```{r echo = FALSE}
+DiagrammeR::grViz("../man/figure/case_classification_3.gv", width=400, height= 400)
+```
+
+
 ### Validation
 
 Data are tabulated below to evaluate the internal consistency of the rules set out in the previous section.
@@ -99,7 +104,7 @@ approx_occupancy <- resident_days_approx(timelines = timelines,
   ) %>% 
   dplyr::group_by(home_code, week_ending) %>% 
   dplyr::summarise(
-    approx_resident_days = sum(approx_occupancy)
+    approx_resident_days = sum(approx_resident_days)
   )
 
 occ_home <- merge(
@@ -165,7 +170,7 @@ ggplot(occ_global, aes(x = resident_days, y = approx_resident_days)) +
   scale_colour_manual(name="Line of fit",
     values = c("Identity" = "black", "OLS" = "blue", "Spline" = "red")) +
   scale_linetype_manual(name="Line of fit",
-    values = c("Identity" = "solid", "OLS" = "longdash", "Spline" = "dotted"))+
+    values = c("Identity" = "solid", "OLS" = "longdash", "Spline" = "dotted")) +
   scale_shape_manual(name="Bed composition",
     values = c(1, 3)) 
 ```
@@ -183,9 +188,13 @@ FSHC regional managers
 
 
 ```{r}
+
+bed2020 <- dplyr::mutate(bed2020, contract_10pc = dplyr::case_when(
+    total_contract_beds/beds >= .1 ~ ">=10% contract beds",
+    TRUE ~ "<10% contract beds"
+  ))
 ch_data <- table_weekly_cases_home()
 ch_data_all <- ch_data %>% 
-  dplyr::filter(week_starting <= "2020-05-04") %>% 
   dplyr::group_by(home_code, home_name_datix, home_name_clickview) %>% 
   dplyr::summarise(
     resident_days = sum(occupancy_imputed, na.rm = T),
@@ -195,21 +204,27 @@ ch_data_all <- ch_data %>%
     tally_confirmed = sum(tally_confirmed, na.rm = T)
   ) %>% 
   dplyr::mutate(
-    home_code_lbl = if_else(tally_first_symptomatic>15, home_code, NA_character_),
-    home_code_lbl2 = if_else(tally_confirmed>15 | first_confirmed>10, home_code, NA_character_))
+    home_code_lbl = if_else(tally_first_symptomatic>20, home_code, ""),
+    home_code_lbl2 = if_else(tally_confirmed>15 | first_confirmed>15, home_code, "")) %>% 
+  dplyr::left_join(bed2020, by = "home_code")
+
+
+
 
 ggplot(data = ch_data_all, 
        aes(x = tally_first_symptomatic, y = first_symptomatic)) + 
-  geom_point() +
-  geom_text(aes(label = home_code_lbl), check_overlap = TRUE, 
-            nudge_x = .5,  nudge_y = 1, vjust = "outward", hjust = "outward") + 
+  geom_point(aes(shape = contract_10pc)) +
+  geom_text(aes(label = home_code_lbl),
+            nudge_x = 2,  nudge_y = 1) + 
   geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
   geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
   xlab("Manager counts") + ylab("Datix-derived counts") + labs(title="Comparison of Datix and manager counts of symptomatic cases") +
   scale_colour_manual(name="Line of fit",
     values = c("Identity" = "black", "OLS" = "blue", "Spline" = "red")) +
   scale_linetype_manual(name="Line of fit",
-    values = c("Identity" = "solid", "OLS" = "longdash", "Spline" = "dotted")) 
+    values = c("Identity" = "solid", "OLS" = "longdash", "Spline" = "dotted")) +
+  scale_shape_manual(name="Bed composition",
+    values = c(1, 3)) 
 
 ```
 
@@ -217,15 +232,17 @@ ggplot(data = ch_data_all,
 ```{r warning=TRUE}
 
 ggplot(data = ch_data_all, aes(x = tally_confirmed, y = first_confirmed)) + 
-  geom_point() +
-  geom_text(aes(label = home_code_lbl2), check_overlap = TRUE, 
-            nudge_x = .5,  nudge_y = 1, vjust = "outward", hjust = "outward") + 
+  geom_point(aes(shape = contract_10pc)) +
+  geom_text(aes(label = home_code_lbl2), 
+            nudge_x = 1,  nudge_y = 1.2) + 
   geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
   geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
   xlab("Manager counts") + ylab("Datix-derived counts") + labs(title="Comparison of Datix and manager counts of confirmed cases") +
   scale_colour_manual(name="Line of fit",
     values = c("Identity" = "black", "OLS" = "blue", "Spline" = "red")) +
   scale_linetype_manual(name="Line of fit",
-    values = c("Identity" = "solid", "OLS" = "longdash", "Spline" = "dotted")) 
+    values = c("Identity" = "solid", "OLS" = "longdash", "Spline" = "dotted")) +
+  scale_shape_manual(name="Bed composition",
+    values = c(1, 3)) 
 
 ```

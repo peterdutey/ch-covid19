@@ -27,9 +27,4 @@ digraph D {
   covid_tested_arm -> covid_tested_yes [label="TRUE"]
   covid_tested_arm -> covid_tested_no [label="FALSE"]
 
-
-  covid_symptomatic [shape=box, label="(3)\ncovid_symptomatic"]
-  covid_symptomatic_code [shape=circle,label="1"]
-  covid_symptomatic -> covid_symptomatic_code
-
 }
