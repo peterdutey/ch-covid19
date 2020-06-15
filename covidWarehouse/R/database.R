@@ -171,6 +171,8 @@ extract_incidents <- function() {
   }
 
   # symptoms
+
+  if(exists("infection_covid_19_symptoms", incidents)){
   ref_symptoms <- reference_symptoms()
   incidents$infection_covid_19_symptoms <- tolower(
     incidents$infection_covid_19_symptoms
@@ -194,8 +196,11 @@ extract_incidents <- function() {
   }
 
   incidents$s_asymptomatic <- as.integer(incidents$infection_covid_19_symptoms == "no symptoms")
+  } else {
+    warnings("not symptoms data")
+  }
 
-  # Ajudicate postive cases
+  # Adjudicate positive cases
   incidents <- incidents %>%
     dplyr::mutate(
       infection_result_code =  dplyr::case_when(
@@ -209,10 +214,12 @@ extract_incidents <- function() {
       covid_tested = as.integer(!is.na(infection_result_code) |
                                   !is.na(infection_covid_19_test_date) |
                                   !infection_confirmed %in% c("Not tested", NA)),
-      covid_symptomatic = dplyr::case_when(
+      covid_symptomatic = #1
+      dplyr::case_when(
         s_asymptomatic == 1 ~ 0L,
         TRUE ~ 1L
-      )) %>%
+      )
+      ) %>%
     dplyr::mutate(
       covid_test_result = dplyr::case_when(
         !is.na(infection_result_code) ~ infection_result_code,
@@ -298,10 +305,35 @@ extract_residents <- function() {
     residents$last_admission_date
   )
 
+  home_types <- dplyr::tibble(
+    funding_type = c('Nursing General', 'Residential General',
+                     'Nursing Dementia', 'Residential Dementia',
+                     'Younger Person', 'Nursing - EMI',
+                     'Nursing - Elderly', 'Residential - Elderly',
+                     'Nursing General Private', 'Residential General Private',
+                     'Nursing Dementia Private', 'Residential Dementia Private',
+                     'Young Chronic Sick/YPD'),
+    home_type = c('Nursing', 'Residential',
+                  'Nursing', 'Residential',
+                  'Younger Person', 'Nursing',
+                  'Nursing', 'Residential',
+                  'Nursing', 'Residential',
+                  'Nursing', 'Residential',
+                  'Young Chronic Sick/YPD'),
+    user_type = c("General", "General",
+                  "Dementia", "Dementia",
+                  "Young", "Elderly",
+                  "Elderly", "Elderly",
+                  "General", "General",
+                  "Dementia", "Dementia",
+                  "Young")
+  )
+
   names(residents)[grep("status_", names(residents))] <- "status"
   residents$status <- trimws(residents$status)
   residents$admission_type <- trimws(residents$admission_type)
   residents$funding_type <- trimws(residents$funding_type)
+  residents <- merge(residents, home_types, all.x = TRUE)
 
   residents <- dplyr::distinct(residents) %>%
     dplyr::rename(resident_id = encrypted_id)
@@ -373,14 +405,26 @@ extract_occupancy <- function() {
 #' @rdname extract_data
 #' @import PostcodesioR
 extract_reference_homes <- function() {
-  reference_homes <- xlsx::read.xlsx(
-    paste0(getOption("FSHC_EXTRACTS_DIRECTORY"), "reference_2020-04-22.xlsx"),
-    sheetName = "Homes", stringsAsFactors = F)
+  reference_homes <- read.csv(
+    paste0(getOption("FSHC_EXTRACTS_DIRECTORY"),
+           "2020-05-07 FSHCG Care Homes as at 2020-04-06.csv"),
+    stringsAsFactors = F)
   names(reference_homes) <- gsub("[.]+", "_", tolower(names(reference_homes)))
 
   reference_homes <- unique(reference_homes)
   reference_homes[reference_homes$postcode=="BA13 3JD", "postcode"] <- "BA13 3JH"
   stopifnot(!any(duplicated(reference_homes$home_code)))
+
+  reference_homes <- dplyr::mutate_at(
+    reference_homes,
+    dplyr::vars(nursing_dementia, nursing_general,
+                residential_dementia, residential_general, younger_person),
+    function(X){
+      dplyr::case_when(X == "Y" ~ 1L,
+                       X == "N" ~ 0L,
+                       TRUE ~ NA_integer_)
+    }
+  )
 
   save(reference_homes, file = file.path(getOption("fshc_files"), "reference_homes.rda"))
 
