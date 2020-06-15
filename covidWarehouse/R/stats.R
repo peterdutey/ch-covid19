@@ -108,3 +108,52 @@ plot_funnel <- function(data, y, denom, home_code, home_name) {
 
 
 
+#' Kaplan-Meier survivor function point and interval estimator for count-time data
+#'
+#' @description Kaplan-Meier estimator based on Greenwods' formula
+#' @param df a data frame
+#' @param t unquoted name of a time variable
+#' @param d unquoted name of the count of events
+#' @param pop unquoted name of the population (inclusive of those who previously
+#' experienced the event, but removing those that are censored, e.g. those who
+#' left the study without experiencing the event)
+#' @param overwrite a boolean indicating whether the function can overwrite variables
+#' `n_t`, `S_t` and `S_t_SE` in `df` (default is TRUE)
+#'
+#' @return the input data frame `df` with additional variables `n_t` for the population
+#' at risk size, `S_t` for the survivor function point estimator, and `S_t_SE` for its
+#' standard error
+#' @references Greenwood M, Jr. \em{The Natural Duration of Cancer}. Reports of Public Health
+#' and Related Subjects Vol 33, HMSO, London; 1926.
+#' @export
+km_ct_estimator <- function(df, t, d, pop, overwrite = TRUE) {
+
+  overwriting <- c("n_t", "S_t", "S_t_SE")[which(
+    sapply(c("n_t", "S_t", "S_t_SE"),
+           exists, where = df)
+  )]
+  if(length(overwriting)>0){
+    if(overwrite){
+      warning(paste0("Overwriting ", paste(overwriting, collapse = ", ")))
+    } else {
+      stop(paste0(paste(overwriting, collapse = ", "), " already exist."))
+    }
+
+  }
+
+  dplyr::arrange(df, {{t}}) %>%
+    dplyr::mutate(
+      n_t = {{pop}} - (cumsum({{d}}) - {{d}})
+    ) %>%
+    dplyr::mutate(
+      S_t = 1 - ({{d}}/n_t)
+    ) %>%
+    dplyr::mutate(
+      S_t = cumprod(S_t)
+    ) %>%
+    dplyr::mutate(
+      S_t_SE = sqrt(S_t^2 * cumsum( {{d}}/(n_t*(n_t-{{d}})) ))
+    )
+
+}
+
