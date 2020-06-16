@@ -122,7 +122,7 @@ occ_home <- merge(
   all.x = TRUE
 ) %>% 
   dplyr::mutate(contract_10pc = dplyr::case_when(
-    total_contract_beds/beds >= .1 ~ ">=10% contract beds",
+    contract_beds/beds >= .1 ~ ">=10% contract beds",
     TRUE ~ "<10% contract beds"
   ))
 
@@ -190,7 +190,7 @@ FSHC regional managers
 ```{r}
 
 bed2020 <- dplyr::mutate(bed2020, contract_10pc = dplyr::case_when(
-    total_contract_beds/beds >= .1 ~ ">=10% contract beds",
+    contract_beds/beds >= .1 ~ ">=10% contract beds",
     TRUE ~ "<10% contract beds"
   ))
 ch_data <- table_weekly_cases_home()

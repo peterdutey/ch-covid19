@@ -105,13 +105,11 @@ extract_incidents <- function() {
   }
   load(file.path(getOption("fshc_files"), "residents.rda"))
 
-  incidents_filepath <- list.files(getOption("FSHC_EXTRACTS_DIRECTORY"), full.names = T)
-  incidents_filepath <- sort(grep("Datix Incidents", incidents_filepath, value = T), decreasing = T)[1]
+  incidents_filepath <- list.files(file.path(getOption("FSHC_EXTRACTS_DIRECTORY"), "incidents"), full.names = T)
+  incidents_filepath <- sort(incidents_filepath, decreasing = T)[1]
   incidents_src <- read.csv(incidents_filepath,
                             stringsAsFactors = F,na.strings = "")
-  names(incidents_src) <- tolower(names(incidents_src))
-  names(incidents_src) <- gsub("[.]+", "_", names(incidents_src))
-  names(incidents_src) <- gsub("(_$)|(^_)", "", names(incidents_src))
+  incidents_src <- clean_variable_names(incidents_src)
 
   incidents <- incidents_src
   for(i in grep("(_date)|(date_of)", names(incidents))){
@@ -174,9 +172,9 @@ extract_incidents <- function() {
 
   if(exists("infection_covid_19_symptoms", incidents)){
   ref_symptoms <- reference_symptoms()
-  incidents$infection_covid_19_symptoms <- tolower(
+  incidents$infection_covid_19_symptoms <- gsub("[â°]", "", tolower(
     incidents$infection_covid_19_symptoms
-  )
+  ))
 
   unique_symptoms <- incidents$infection_covid_19_symptoms %>%
     na.omit %>%
@@ -191,7 +189,7 @@ extract_incidents <- function() {
     incidents[[paste0("s_", ref_symptoms$symptom_name[i])]] <-
       as.integer(
         grepl(ref_symptoms$symptom_description[i],
-              incidents$infection_covid_19_symptoms)
+              incidents$infection_covid_19_symptoms, fixed=TRUE)
       )
   }
 
@@ -286,13 +284,11 @@ extract_incidents <- function() {
 #' @rdname extract_data
 extract_residents <- function() {
 
-  residents_filepath <- list.files(getOption("FSHC_EXTRACTS_DIRECTORY"), full.names = T)
-  residents_filepath <- sort(grep("Residents_as_at", residents_filepath, value = T), decreasing = T)[1]
+  residents_filepath <- list.files(file.path(getOption("FSHC_EXTRACTS_DIRECTORY"), "residents"), full.names = T)
+  residents_filepath <- sort(residents_filepath, decreasing = T)[1]
   residents_src <- read.csv(residents_filepath,
                             stringsAsFactors = F,na.strings = "")
-  names(residents_src) <- tolower(names(residents_src))
-  names(residents_src) <- gsub("[.]+", "_", names(residents_src))
-  names(residents_src) <- gsub("(_$)|(^_)", "", names(residents_src))
+  residents_src <- clean_variable_names(residents_src)
 
   residents <- residents_src
   for(i in grep("(_date)|(date_of)", names(residents))){
@@ -358,26 +354,24 @@ extract_occupancy <- function() {
     extract_reference_homes()
   }
 
-  occupancy_filepath <- list.files(getOption("FSHC_EXTRACTS_DIRECTORY"), full.names = T)
-  occupancy_filepath <- grep(".csv$", occupancy_filepath, value = T)
-  occupancy_filepath <- sort(grep("[wW]eekly [Oo]cc", occupancy_filepath, value = T), decreasing = T)[1]
-  occupancy_src <- read.csv(occupancy_filepath,
-                            stringsAsFactors = F,na.strings = "")
+  occupancy_filepath <- list.files(file.path(getOption("FSHC_EXTRACTS_DIRECTORY"), "occupancy"), full.names = T)
+  occupancy_filepath <- sort(occupancy_filepath, decreasing = T)[1]
+  occupancy_src <- read.csv(occupancy_filepath, stringsAsFactors = F, na.strings = "")
+  occupancy_src <- clean_variable_names(occupancy_src)
 
-  cbeds <- read.csv(file.path(getOption("FSHC_EXTRACTS_DIRECTORY"),
-                              "2020-06-10 Contract beds by home.csv"),
-                    stringsAsFactors = F)
+  cbeds_filepath <- list.files(file.path(getOption("FSHC_EXTRACTS_DIRECTORY"), "beds"), full.names = T)
+  cbeds_filepath <- sort(cbeds_filepath, decreasing = T)[1]
+  cbeds <- read.csv(cbeds_filepath, stringsAsFactors = F)
+  cbeds <- clean_variable_names(cbeds)
   cbeds$year <- "2020"
-
-  names(occupancy_src) <- tolower(names(occupancy_src))
-  names(occupancy_src) <- gsub("[.]+", "_", names(occupancy_src))
 
   beds <- dplyr::select(occupancy_src, home_code, dplyr::starts_with("beds_"))
   beds <- reshape(beds, direction = "long", idvar = "home_code",
             varying = 2:ncol(beds), v.names = "beds", sep = "_",
             timevar = "year",
             times = gsub("beds_", "", names(beds)[2:ncol(beds)])) %>%
-    merge(cbeds, all.x = T)
+    merge(cbeds, all.x = T) %>%
+    dplyr::mutate(contract_beds = tidyr::replace_na(contract_beds, 0))
   row.names(beds) <- NULL
 
   occupancy <- dplyr::select(occupancy_src, home_code, dplyr::starts_with("x"))
@@ -405,12 +399,11 @@ extract_occupancy <- function() {
 #' @rdname extract_data
 #' @import PostcodesioR
 extract_reference_homes <- function() {
-  reference_homes <- read.csv(
-    paste0(getOption("FSHC_EXTRACTS_DIRECTORY"),
-           "2020-05-07 FSHCG Care Homes as at 2020-04-06.csv"),
-    stringsAsFactors = F)
-  names(reference_homes) <- gsub("[.]+", "_", tolower(names(reference_homes)))
 
+  homes_filepath <- list.files(file.path(getOption("FSHC_EXTRACTS_DIRECTORY"), "homes"), full.names = T)
+  homes_filepath <- sort(homes_filepath, decreasing = T)[1]
+  reference_homes <- read.csv(homes_filepath, stringsAsFactors = F, na.strings = "")
+  reference_homes <- clean_variable_names(reference_homes)
   reference_homes <- unique(reference_homes)
   reference_homes[reference_homes$postcode=="BA13 3JD", "postcode"] <- "BA13 3JH"
   stopifnot(!any(duplicated(reference_homes$home_code)))
@@ -458,6 +451,11 @@ extract_reference_homes <- function() {
     grep("_code$", colnames(reference_geography))
   )]
 
+  reference_geography <- dplyr::mutate(
+    reference_geography,
+    region_UK = if_else(country == "England", region, country)
+  )
+
   save(reference_geography, file = file.path(getOption("fshc_files"), "reference_geography.rda"))
   usethis::ui_done("reference_geography.rda")
 }
@@ -469,7 +467,7 @@ extract_tallies <- function() {
     extract_reference_homes()
   }
 
-  files <- list.files(getOption("FSHC_EXTRACTS_DIRECTORY"), full.names = T)
+  files <- list.files(file.path(getOption("FSHC_EXTRACTS_DIRECTORY"), "tallies"), full.names = T)
   new_filepath <- sort(grep("tally_new_cases.*csv$", files, value = T), decreasing = T)[1]
   total_filepath <- sort(grep("tally_total_cases.*csv$", files, value = T), decreasing = T)[1]
 
@@ -572,6 +570,7 @@ reference_symptoms <- function(){
       "short_breath",
       "hoarse",
       "fever",
+      "smell",
       "other",
       "asymptomatic"
     ),
@@ -582,8 +581,17 @@ reference_symptoms <- function(){
       "wheezing",
       "shortness of breath",
       "hoarseness",
-      "fever (temp 37.8°c or above)",
+      "fever (temp 37.8c or above)",
+      "loss of sense of taste or smell",
       "other symptoms not listed",
       "no symptoms"
     ))
+}
+
+
+clean_variable_names <- function(x){
+  names(x) <- tolower(names(x))
+  names(x) <- gsub("[.]+", "_", names(x))
+  names(x) <- gsub("(_$)|(^_)", "", names(x))
+  x
 }
