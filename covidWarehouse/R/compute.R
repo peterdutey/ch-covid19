@@ -246,7 +246,7 @@ resident_days_approx <- function(timelines_data = timelines, time_span = get_tim
   }
 
   occup <- timeline %>%
-    dplyr::group_by(home_id, date, date_end) %>%
+    dplyr::group_by(home_code, date, date_end) %>%
     dplyr::summarise(
       approx_resident_days = sum(rday, na.rm = T)
     )

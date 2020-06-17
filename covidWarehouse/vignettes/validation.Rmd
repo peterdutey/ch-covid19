@@ -98,7 +98,6 @@ The plots below compare both measures at the care-home level and FSHC overall.
 approx_occupancy <- resident_days_approx(timelines = timelines,
                                          time_span = get_time_span()
                                         ) %>% 
-  dplyr::rename(home_code = home_id) %>% 
   dplyr::mutate(
     week_ending = get_monday_date(date) %m+% days(6)
   ) %>% 

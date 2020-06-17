@@ -110,6 +110,10 @@ extract_incidents <- function() {
   incidents_src <- read.csv(incidents_filepath,
                             stringsAsFactors = F,na.strings = "")
   incidents_src <- clean_variable_names(incidents_src)
+  # removing Jersey
+  incidents_src <- dplyr::filter(incidents_src,
+                                 ! tolower(trimws(home)) %in% c("la haule",
+                                                                "silver springs"))
 
   incidents <- incidents_src
   for(i in grep("(_date)|(date_of)", names(incidents))){
@@ -154,7 +158,6 @@ extract_incidents <- function() {
       home_name == "Gilmerton NCC" ~ "Gilmerton",
       TRUE ~ home_name
     ))
-
   incidents <- dplyr::left_join(incidents, home_codes, by = "home_name")
 
   if(any(is.na(incidents$home_code))) {
@@ -289,9 +292,12 @@ extract_residents <- function() {
   residents_src <- read.csv(residents_filepath,
                             stringsAsFactors = F,na.strings = "")
   residents_src <- clean_variable_names(residents_src)
+  # Removing Jersey
+  residents_src <- dplyr::rename(residents_src, home_code = home_id)
+  residents_src <- dplyr::filter(residents_src, !home_code %in% c("LAH", "SIL"))
 
   residents <- residents_src
-  for(i in grep("(_date)|(date_of)", names(residents))){
+  for(i in grep("(_date)|(date_of)|(dob)", names(residents))){
     residents[,i] <- lubridate::dmy(residents[,i])
   }
 
@@ -334,12 +340,12 @@ extract_residents <- function() {
   residents <- dplyr::distinct(residents) %>%
     dplyr::rename(resident_id = encrypted_id)
 
-  check_homes(residents$home_id, call = "`residents`")
+  check_homes(residents$home_code, call = "`residents`")
 
-  if(sum(is.na(residents$home_id))) {
+  if(sum(is.na(residents$home_code))) {
     warning(
       "home is missing in ",
-      as.character(sum(is.na(residents$home_id))),
+      as.character(sum(is.na(residents$home_code))),
       " residents records")
   }
 
@@ -358,6 +364,8 @@ extract_occupancy <- function() {
   occupancy_filepath <- sort(occupancy_filepath, decreasing = T)[1]
   occupancy_src <- read.csv(occupancy_filepath, stringsAsFactors = F, na.strings = "")
   occupancy_src <- clean_variable_names(occupancy_src)
+  # Removing Jersey
+  occupancy_src <- dplyr::filter(occupancy_src, !home_code %in% c("LAH", "SIL"))
 
   cbeds_filepath <- list.files(file.path(getOption("FSHC_EXTRACTS_DIRECTORY"), "beds"), full.names = T)
   cbeds_filepath <- sort(cbeds_filepath, decreasing = T)[1]
@@ -406,6 +414,8 @@ extract_reference_homes <- function() {
   reference_homes <- clean_variable_names(reference_homes)
   reference_homes <- unique(reference_homes)
   reference_homes[reference_homes$postcode=="BA13 3JD", "postcode"] <- "BA13 3JH"
+  # Remove Jersey
+  reference_homes <- dplyr::filter(reference_homes, !home_code %in% c("LAH", "SIL"))
   stopifnot(!any(duplicated(reference_homes$home_code)))
 
   reference_homes <- dplyr::mutate_at(
@@ -418,6 +428,7 @@ extract_reference_homes <- function() {
                        TRUE ~ NA_integer_)
     }
   )
+
 
   save(reference_homes, file = file.path(getOption("fshc_files"), "reference_homes.rda"))
 
@@ -477,10 +488,12 @@ extract_tallies <- function() {
   names(new_cases) <- tolower(names(new_cases))
   new_cases$date <- lubridate::dmy(new_cases$date)
   new_cases$time <- lubridate::dmy_hm(new_cases$time)
+  new_cases <- dplyr::filter(new_cases, !home_code %in% c("LAH", "SIL"))
 
   names(total_cases) <- tolower(names(total_cases))
   total_cases$date <- lubridate::dmy(total_cases$date)
   total_cases$time <- lubridate::dmy_hm(total_cases$time)
+  total_cases <- dplyr::filter(total_cases, !home_code %in% c("LAH", "SIL"))
 
   # Merge Gilmerton NCC within 565	Gilmerton
   # Rid of Holybourne Day Centre (closed)
