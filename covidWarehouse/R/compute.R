@@ -5,23 +5,24 @@ compute_age <- function(dob, date){
     , "year")))
 }
 
-cut_age_denary <- function(age) {
-  # as.character(
+cut_age_denary <- function(age, age.min = 40, age.max = 130) {
+
     cut(
       x = age,
-      breaks = c(seq(30, 130, 10), 150),
+      breaks = c(0, seq(age.min, age.max, 10), 150),
       include.lowest = FALSE,
       right = FALSE,
-      labels = c(paste0(
-        seq(30, 129, 10), "-",
-        seq(39, 129, 10), " years"),
-        "130+ years")
-    )#)
+      labels = c(
+        paste0("<", age.min, " years"),
+        paste0(
+          seq(age.min, age.max-1, 10), "-",
+          seq(age.min+9, age.max-1, 10), " years"),
+        paste0(age.max, "+ years"))
+    )
 }
 
 
 cut_age_quinary <- function(age) {
-  as.character(
     cut(
       x = age,
       breaks = c(seq(30, 135, 5), 150),
@@ -31,11 +32,11 @@ cut_age_quinary <- function(age) {
         seq(30, 130, 5), "-",
         seq(34, 134, 5), " years"),
         "135+ years")
-    ))
+    )
 }
 
 cut_age_pentadecimal <- function(age) {
-  as.character(
+
     cut(
       x = age,
       breaks = c(seq(30, 135, 15), 150),
@@ -45,8 +46,8 @@ cut_age_pentadecimal <- function(age) {
         seq(30, 129, 15), "-",
         seq(44, 135, 15), " years"),
         "135+ years")
-    ))
-  }
+    )
+}
 
 tbrounding <- function(x, places = 1){
   format(round(x, places), nsmall = places)
@@ -97,7 +98,7 @@ min_non_missing <- function(x) {
 #' @importFrom lubridate %m+% days
 get_time_span <- function(data = incidents) {
   dplyr::summarise(data,
-            start = get_monday_date(min(incident_date)),
+            start = as.Date("2020-03-02"),
             end = get_monday_date(max(incident_date)) %m+% days(6)) %>%
     as.list
 
@@ -146,6 +147,7 @@ resident_timelines <- function(residents_data = residents,
 
   incidents_data <- dplyr::group_by(incidents_data, resident_id) %>%
     dplyr::summarise(
+      covid_first_symptomatic = min_non_missing(covid_first_symptomatic),
       covid_first_positive = min_non_missing(covid_first_positive),
       covid_death = min_non_missing(infection_covid_19_date_of_death)
     )
@@ -160,10 +162,12 @@ resident_timelines <- function(residents_data = residents,
     dplyr::mutate(
       timeline = purrr::pmap(list(resident_id,
                                   data,
+                                  covid_first_symptomatic,
                                   covid_first_positive,
                                   covid_death),
                              function(resident_id,
                                       data,
+                                      covid_first_symptomatic,
                                       covid_first_positive,
                                       covid_death){
 
@@ -173,7 +177,8 @@ resident_timelines <- function(residents_data = residents,
       # probably pseudonymisation problem
       main_admissions <- dplyr::distinct(data) %>%
         dplyr::mutate(admission_type2 = as.integer(admission_type != "Respite")) %>%
-        dplyr::arrange(desc(admission_type2), desc(last_discharge_date), desc(last_admission_date), desc(last_admission_date)) %>%
+        dplyr::arrange(desc(admission_type2), desc(last_discharge_date),
+                       desc(last_admission_date), desc(last_admission_date)) %>%
         .[1,]
 
       timeline <- data.frame(list(
@@ -209,20 +214,22 @@ resident_timelines <- function(residents_data = residents,
 
       timeline[timeline$date %in% other_admissions_days, "rday"] <- 1
 
-
       timeline <- resident_days_approx_indicator(timeline) %>%
         dplyr::mutate(
           rday = dplyr::case_when(
             date > covid_death ~ 0L,
             TRUE ~ rday
-          ),
-          susceptible = 1L
-        ) %>%
+          )) %>%
         dplyr::mutate(
-          susceptible = dplyr::case_when(
+          susceptible_symptomatic = dplyr::case_when(
+            rday == 0 ~ 0L,
+            date > covid_first_symptomatic ~ 0L,
+            TRUE ~ 1L
+          ),
+          susceptible_confirmed = dplyr::case_when(
             rday == 0 ~ 0L,
             date > covid_first_positive ~ 0L,
-            TRUE ~ susceptible
+            TRUE ~ 1L
           ))
 
       timeline

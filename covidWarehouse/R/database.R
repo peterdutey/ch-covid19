@@ -349,6 +349,9 @@ extract_residents <- function() {
       " residents records")
   }
 
+  residents <- dplyr::filter(residents,
+                             !funding_type %in% c("Young Chronic Sick/YPD", "Younger Person"))
+
   save(residents, file = file.path(getOption("fshc_files"), "residents.rda"))
   usethis::ui_done("residents.rda")
 }

@@ -1,0 +1,591 @@
+---
+title: "Incidence and period prevalence of confirmed COVID-19 cases in care home staff and residents: Cohort study of secondary use records in a large care home provider in England, Scotland and Northern Ireland (March-June 2020)"
+# author: "Dutey-Magni, PF, Williams, H, Hayward, A, Shallcross, L"
+date: "16/06/2020"
+bibliography: references.bib
+csl: sage-vancouver.csl
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    code_folding: hide
+  pdf_document:
+    citation_package: natbib
+    df_print: kable
+    fig_caption: yes
+    keep_tex: yes
+    number_sections: yes
+    toc: yes
+  word_document:
+    toc: yes
+    reference_docx: template.docx
+link-citations: yes
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE)
+options(OutDec = "·")
+knit_output_pdf <- F
+if(knit_output_pdf){
+  options(knitr.table.format = "pdf")
+} else {
+  options(knitr.table.format = "pandoc")
+}
+
+source("../.Rprofile")
+devtools::load_all("..")
+load_data()
+library(dplyr)
+library(lubridate)
+library(kableExtra)
+library(captioner)
+library(survival)
+library(survminer)
+library(ggplot2)
+library(finalfit)
+
+knit_output_pdf <- F
+if(knit_output_pdf){
+  options(knitr.table.format = "pdf")
+} else {
+  options(knitr.table.format = "pandoc")
+}
+
+date_min <- as.Date("2020-03-02")
+date_max <- as.Date("2020-06-15")
+date_max_tallies = as.Date("2020-06-07")
+
+```
+
+```{r descriptives}
+homes_country <- select(reference_homes, home_code, postcode) %>% 
+  left_join(transmute(reference_geography, postcode, 
+                      country, region_england = region), by = "postcode") %>% 
+  mutate(region_UK = if_else(country == "England", region_england, country)) %>% 
+  select(-postcode)
+
+incidents <- incidents %>% 
+  dplyr::filter(dplyr::between(incident_date, date_min, date_max)) #%>% 
+  # dplyr::filter(!resident_id %in% 
+  #                 residents$resident_id[residents$funding_type %in% c("Young Chronic Sick/YPD", 
+  #                                                                     "Younger Person")])
+
+desc_before_exclusions <- list()
+desc_before_exclusions$nrow_incidents <- nrow(incidents)
+desc_before_exclusions$missing_id <- sum(grepl("^MISSING", incidents$resident_id))
+desc_before_exclusions$missing_id_pct <- mean(grepl("^MISSING", incidents$resident_id))*100
+desc_before_exclusions$link_fail <- sum(!incidents$resident_id[
+  which(!grepl("^MISSING", incidents$resident_id))] %in% unique(residents$resident_id))
+desc_before_exclusions$link_fail_pct <- tbrounding(
+  sum(!incidents$resident_id[
+    which(!grepl("^MISSING", incidents$resident_id))] %in% unique(residents$resident_id)) / 
+    nrow(incidents)*100) 
+
+
+# removing erroneous incident reports (no identifier or not linking to residents file) 
+incidents <- filter(incidents, !grepl("^MISSING", resident_id)) %>% 
+  filter(resident_id %in% unique(residents$resident_id))
+
+tline <- dplyr::bind_rows(timelines$timeline)
+stopifnot(unique(tline$date_end)>=date_max)
+tline <- filter(tline, between(date, date_min, date_max)) %>% 
+  filter(!funding_type %in% c("Young Chronic Sick/YPD", "Younger Person"))
+
+
+new_cases <- filter(new_cases, between(date, date_min, date_max_tallies))
+  
+approx_occupancy <- tline %>% 
+  group_by(home_code, date) %>% 
+  summarise(
+    occupancy = sum(tidyr::replace_na(rday, 0)),
+    susceptible_symptomatic = sum(susceptible_symptomatic, na.rm = T),
+    susceptible_confirmed = sum(susceptible_confirmed, na.rm = T))
+
+approx_occupancy <- merge(
+  tibble(date = seq(date_min, date_max, 1)),
+  tibble(home_code = unique(reference_homes$home_code)),
+  all = TRUE) %>% 
+  left_join(approx_occupancy)
+
+desc_residents <- tline %>% 
+  filter(rday == 1)  %>% 
+  group_by(resident_id, home_code, dob, gender, 
+           admission_type, home_type, user_type, status) %>% 
+  summarise(resident_days = sum(rday),
+            susceptible_symptomatic_days = sum(susceptible_symptomatic),
+            susceptible_confirmed_days = sum(susceptible_confirmed)) %>% 
+  mutate(ageg = cut_age_denary(compute_age(dob, date_min), age.min = 50, age.max = 100)) %>% 
+  left_join(homes_country, by = "home_code")
+
+res_counts <- desc_residents %>% 
+  group_by(home_code) %>% 
+  summarise(unique_residents = n_distinct(resident_id))
+
+desc_homes <- reference_homes %>% 
+  left_join(transmute(reference_geography, postcode, 
+                      country, region_england = region), by = "postcode") %>% 
+  left_join(filter(beds, year=="2020"), by = "home_code") %>% 
+  left_join(res_counts, by = "home_code") %>%
+  mutate(Scope = paste("FSHCG", country)) %>% 
+  group_by(Scope) %>% 
+  summarise(`Total homes` = n_distinct(home_code),
+            `Total beds` = sum(beds),
+            `Total contract beds` = sum(contract_beds, na.rm = T),
+            `Total residents (excl. contract beds)` = sum(unique_residents, na.rm = T))
+
+desc_national <- tibble(
+  Scope = c("England", "Scotland (2017)", "Northern Ireland"),
+  `Total homes` = c(9400, 1142, 483),
+  `Total beds` = c(45000, 40926, 16095),
+  `Total contract beds` = NA_integer_,
+  `Total residents` = c(NA, 35989, NA)
+)
+
+
+
+desc_overall <- list()
+desc_overall$total_residents <- dplyr::n_distinct(desc_residents$resident_id)
+#COUNTS
+desc_overall$CT_total_symptomatic <- sum(new_cases$new_symptomatic_home, na.rm=T) + 
+  sum(new_cases$new_symptomatic_hospital, na.rm=T)
+desc_overall$CT_p_symptomatic <- desc_overall$CT_total_symptomatic/desc_overall$total_residents
+desc_overall$CT_p_symptomatic_ME <- 1.96 * sqrt(
+  (desc_overall$CT_p_symptomatic*(1-desc_overall$CT_p_symptomatic)/desc_overall$total_residents)
+)
+#INCIDENT REPORTS
+desc_overall$unique_residents_incidents <- dplyr::n_distinct(incidents$resident_id)
+
+desc_overall$DAT_total_symptomatic <- n_distinct(filter(incidents, !is.na(covid_first_symptomatic))$resident_id)
+desc_overall$DAT_p_symptomatic <- desc_overall$DAT_total_symptomatic/desc_overall$total_residents
+desc_overall$DAT_p_symptomatic_ME <- 1.96 * sqrt(
+  desc_overall$DAT_p_symptomatic * (1 - desc_overall$DAT_p_symptomatic) / 
+    desc_overall$total_residents
+)
+desc_overall$total_tests <- nrow(dplyr::filter(incidents, covid_tested == 1))
+desc_overall$unique_residents_tested <- dplyr::filter(incidents, covid_tested == 1) %>% 
+  dplyr::n_distinct(.$resident_id)
+desc_overall$unique_residents_test_result <- dplyr::filter(incidents, !is.na(covid_test_result)) %>% 
+  dplyr::n_distinct(.$resident_id)
+desc_overall$unique_residents_test_result_positive <- dplyr::filter(incidents, covid_test_result == 1) %>% 
+  dplyr::n_distinct(.$resident_id)
+ 
+
+desc_homes <- bind_rows(desc_homes, desc_national) 
+
+## TABLES
+table_nums <- captioner::captioner(prefix = "Table")
+tab_national_descriptives <- table_nums(
+  name = "tab_national_descriptives",
+  caption = "Total homes, beds, and residents within FSHCG and nationwide")
+tab_resident_descriptives <- table_nums(
+  name = "tab_resident_descriptives",
+  caption = paste0("Breakdown of FSHCG residents by care home type, sex, age, region and status on study exit (", format(date_min, "%d/%m/%y"), "-", format(date_max, "%d/%m/%y"), ")"))
+
+tab_CoxPH_confirmed <- table_nums(
+  name = "tab_CoxPH_confirmed",
+  caption =  paste0("Hazard ratios of becoming a confirmed case estimated from a Cox Proportional Hazards model (n=", 
+  formatbm(dplyr::n_distinct(desc_residents$resident_id)),
+  ")"))
+
+## FIGURES
+fig_nums <- captioner(prefix = "Figure")
+
+fig_KM_CT_residents_symptomatic <- fig_nums(
+  name = "KM_CT_residents_symptomatic",
+  caption = paste0("Kaplan-Meier estimator of the cumulative probability of residents becoming symptomatic based on care home manager daily counts")
+)
+fig_KM_confirmed_residents <- fig_nums(
+  name = 'fig_KM_confirmed_residents',
+  caption = paste0("Kaplan-Meier estimator of the cumulative probability of residents (n=", 
+  formatbm(dplyr::n_distinct(desc_residents$resident_id)),
+  ") becoming confirmed cases based on Datix incidents report"))
+fig_KM_CT_confirmed_residents <- fig_nums(
+  name = 'fig_KM_CT_confirmed_residents',
+  caption = "Kaplan-Meier estimator of the cumulative probability of residents becoming confirmed cases based on care home manager daily counts")
+
+```
+
+# Abstract
+
+**Background**
+
+**Methods:**
+
+**Findings:** A total of `r formatbm(n_distinct(desc_residents$resident_id))` residents were examined across England, Scotland and Northern Ireland, `r tbrounding(mean(residents$home_type=="Nursing")*100)` of whom were in nursing homes and 39·2% received dementia care (`r table_nums("tab_resident_descriptives", display = "cite")`).  
+
+**Interpretation**
+
+**Funding:** This work was supported by the Economic and Social Research Council [grant reference ES/V003887/1].
+
+# Background 
+
+COVID-19 causes significant mortality in elderly and vulnerable people and spreads easily in care homes where one in seven individuals aged > 85 years live. However, there is no surveillance for infection in care homes, nor are there systems (or research studies) monitoring the impact of the pandemic on individuals or systems. Usual practices are disrupted during the pandemic, and care home staff are taking on new and unfamiliar roles, such as advanced care planning. Understanding the nature of these changes is critical to mitigate the impact of COVID-19 on residents, relatives and staff.
+
+This study reports on data obtained from the Four Seasons Health Care Group (FSHCG), one of the UK's largest independent provider of long-term and respite residential and nursing care. In 2020, FSHCG represented approximately 9% of all beds in England, Scotland and Northern Ireland (`r table_nums("tab_national_descriptives", display = "cite")`)). FSHCG residents accessed nose and throat swab antigen tests during hospitalisations in the first instance, but tests became available in care homes from XXXXX. From 11 May 2020, FSHCG home undertook testing every resident. ***(Haydn, more detail would be greatly appreciated)***
+ 
+`r table_nums("tab_national_descriptives")` @cqcdata2020,@hscni2020,@isd2020
+
+```{r table_national_descriptives, fig.cap = tab_national_descriptives, message=F}
+mutate_all(desc_homes,  .funs = formatbm) %>% arrange(gsub("FSHC ", "", Scope)) %>% t %>% kable
+``` 
+
+# Methods
+
+
+## Individual-level residents data
+
+Secondary use individual-level data were extracted and pseudonymised by HW. They consisted of:
+
+- **a residents dataset** containing one record per resident per care home, alongside residents' gender, date of birth, most recent dates of admission and discharge, date of first admission, type of stay (residential/nursing) and care (general, dementia, elderly). This dataset does not include any records for occupants of local authority 'block contract' beds  ($n=$ `r formatbm(sum(desc_homes[["Total contract beds"]], na.rm=T))`).
+- **an incidents dataset** containing `r formatbm(desc_before_exclusions$nrow_incidents)` reports filed by care home staff into FSHCG's Datix incidents management system. Mandated report field were: resident forename, surname, care home identifier, incident date/time, and date/time of reporting. In addition, reports can include: date of birth, gender, information on COVID-19 symptoms, tests and test results, resident current location (home/hospital), and death.
+
+HW created a resident index file bridging the two datasets using: the first three letters of the resident's forename; the resident's full surname; and the care home identifier. Clerical review of identifiers generated in this way established that no single identifier was allocated to distinct individuals in the residents dataset. Just `r desc_before_exclusions$missing_id` (`r tbrounding(desc_before_exclusions$missing_id_pct)`%) Datix reports did not contain enough information to generate an identifier and were excluded. Identifiers of a further `r desc_before_exclusions$link_fail` reports (`r desc_before_exclusions$link_fail_pct`%) could not be successfully linked to the residents dataset and were excluded, after clerical review established they could not be matched with a resident. A proportion of these reports may have been filed in error, while others may relate to occupants of local authority beds who are not accounted for in the residents dataset.
+
+## Aggregate data
+
+Daily counts reported by care home managers to FSHCG were obtained for every care home:
+
+- new symptomatic cases (residents)
+- new confirmed cases in home (residents)
+- new confirmed cases in hospital (residents)
+- deaths related to COVID-19 (Haydn please confirm what these correspond to: suspected/coroner report/tested positive before death?)
+- new symptomatic cases (staff)
+- new confirmed cases (staff)
+- deaths related to COVID-19 (staff)
+
+These counts include events relating to occupants of local authority contract beds. 
+
+## Analysis
+
+
+We estimate the incidence of symptomatic and confirmed cases as well as deaths using the individual-level data. Doing so enables us to accurately account for the duration of exposure in resident-days as well as right-censoring, since individual records indicate when a resident was discharged or died. In order to study the effect of potential risk factors, total cases and resident-days were aggregated by care home by care type and demographic characteristics and regressed in a Poisson hierarchical level with care home and time independent and identically distributed random effects. This provides measures of relative risks.
+
+However, a Datix report may not have been filed for every event. We therefore also estimate the incidence and period prevalence of events using manager counts, using the total resident-days denominator derived from the individual-level data. 
+
+- figure for the cumulative number/proportion of staff and residents infected over time... this is another area of significant interest so we can get an estimate (with caveats) of the proportion of staff and residents who remain susceptible to infection. -> KM by age or care home type or nation/region
+- how many care homes have not had any cases reported in staff or residents during the pandemic because these homes will presumably be at greatest risk in a second wave.
+- individual and care home characteristics associated with high number of cases. Nationally the only 2 factors that have been proposed so far are care home size and provision of nursing care. -> **regression model on RR of infection** number of previous cases (lag effect) is important here. So the time effect
+
+Data were analysed in `R`3·5·0 @RCoreTeam2018 and the `survival` package @therneau2015. All computer syntax is available on an online repository @Dutey2020.
+
+# Results
+
+## Descriptives
+
+The study population consisted of `r formatbm(desc_overall$total_residents)` residents across England, Scotland and Northern Ireland, `r tbrounding(mean(residents$home_type=="Nursing")*100)`% of whom were in nursing homes and 39·2% received dementia care (`r table_nums("tab_resident_descriptives", display = "cite")`). The vast majority (85·4%) were permanent residents. A total of `r formatbm(nrow(incidents))` COVID-19 incidents were reported as of `r format(max(incidents$incident_date), "%A %e %b %Y")` for  `r formatbm(desc_overall$unique_residents_incidents)` unique residents. 
+
+Datix reports and manager counts respectively indicated that `r formatbm(desc_overall$DAT_total_symptomatic)` (`r tbrounding(desc_overall$DAT_p_symptomatic*100)`% [95% confidence interval: `r tbrounding((desc_overall$DAT_p_symptomatic - desc_overall$DAT_p_symptomatic_ME)*100)`; `r tbrounding((desc_overall$DAT_p_symptomatic + desc_overall$DAT_p_symptomatic_ME)*100)`]) and `r formatbm(desc_overall$CT_total_symptomatic)` (`r tbrounding(desc_overall$CT_p_symptomatic*100)`% [`r tbrounding((desc_overall$CT_p_symptomatic - desc_overall$CT_p_symptomatic_ME)*100)`; `r tbrounding((desc_overall$CT_p_symptomatic + desc_overall$CT_p_symptomatic_ME)*100)`]) became symptomatic at some point between `r format(date_min, "%e %B %Y")` and `r format(date_max, "%e %B %Y")`. Temporal trends broken down by region (`r fig_nums("fig_KM_CT_residents_symptomatic", display = "cite")`) indicate wide variation across the UK, with care homes in the South East and Northern Ireland reporting in excess of a third of residents with symptoms.
+
+`r table_nums("tab_resident_descriptives")`
+
+```{r table_resident_descriptives, message = FALSE, results="asis"}
+arsenal::tableby(home_type  ~ gender + ageg + region_UK +
+                                 user_type + admission_type + status, 
+                               data = desc_residents) %>% summary()
+```
+
+
+`r fig_nums("fig_KM_CT_residents_symptomatic")`
+
+```{r KM_CT_residents_symptomatic, fig.height = 5, fig.width = 10}
+
+residents_ct_symp <- tibble(date = seq(date_min, date_max_tallies, 1)) %>% 
+  left_join(distinct(new_cases, date, home_code, 
+                     new_symptomatic_home, new_symptomatic_hospital)) %>% 
+  filter(!is.na(home_code)) %>% 
+  left_join(distinct(reference_homes, home_code, home_name_datix, postcode)) %>% 
+  left_join(select(reference_geography, postcode, region_UK)) %>% 
+  left_join(approx_occupancy) %>% 
+  arrange(date) 
+
+km_ct_residents_symp <- residents_ct_symp %>% 
+  group_by(date, region_UK) %>% 
+  summarise(
+    symptomatic = sum(tidyr::replace_na(new_symptomatic_home, 0) + 
+                      tidyr::replace_na(new_symptomatic_hospital, 0)),
+    occupancy = sum(tidyr::replace_na(susceptible_symptomatic, 0))
+  ) %>% 
+  group_by(region_UK) %>% 
+  km_ct_estimator(df = ., t = date, d = symptomatic, 
+                  pop = occupancy, subtract_cases = FALSE, overwrite = TRUE) %>% 
+  ungroup() %>% 
+  mutate(
+    St_max = S_t^exp(1.96*S_t_SElog),
+    St_min = S_t^exp(-1.96*S_t_SElog)
+  )
+
+order_key <-km_ct_residents_symp %>% 
+  group_by(region_UK) %>% 
+  summarise(S_t = min(S_t)) %>% 
+  arrange(S_t)
+km_ct_residents_symp$region_UK <- factor(
+  km_ct_residents_symp$region_UK,
+  levels = order_key$region_UK
+)
+km_ct_residents_symp$region_group <- cut(as.integer(km_ct_residents_symp$region_UK), 2, labels = 1:2)
+
+ggplot(aes(x = date, y = 1-S_t, 
+           ymax = 1 - St_max,
+           ymin = 1 - St_min,
+           color = region_UK), data = km_ct_residents_symp) +
+  # facet_grid(region_group ~ .) +
+  geom_ribbon(alpha=0.05, linetype = 2,stat = ) +
+  geom_path(lwd=1.2) +
+  scale_y_continuous("Cum probability confirmed case",
+                     breaks = seq(0,1,.05)) +
+  scale_color_discrete("Region") +
+  scale_x_date(name = "Date", 
+               breaks = unique(get_monday_date(km_ct_residents_symp$date)),
+               labels = format.Date(
+                 unique(get_monday_date(km_ct_residents_symp$date)),
+                 "%d/%m/%y"
+               )) +
+  theme_bw()
+
+```
+
+
+
+## Resident confirmed cases
+
+The reports were returned by `r formatbm(dplyr::n_distinct(incidents$home_code))` care homes  totalling `r formatbm(sum(beds[beds$year=="2020" & beds$home_code %in% unique(incidents$home_code), "beds"]))` beds. 
+Datix incidents accounted for `r formatbm(desc_overall$unique_residents_tested)` residents tested at least once. Test results were known for `r formatbm(desc_overall$unique_residents_test_result)` residents: `r formatbm(desc_overall$unique_residents_test_result_positive)` residents had a record of a positive test result. This data cannot be treated as representative, as engagement with FSHCG confirmed that test coming back negative were not commonly recorded on Datix. Care home manager daily counts of new confirmed cases added up to `r formatbm(sum(new_cases$new_confirmed_home, na.rm = T))` cases tested in homes and `r formatbm(sum(new_cases$new_confirmed_hospital, na.rm = T))` tested in hospitals. The regional breakdown is presented in 
+
+The temporal trend of confirmed cases obtained from either Datix reports (`r fig_nums("fig_KM_confirmed_residents", display = "cite")`) or manager counts (`r fig_nums("fig_KM_CT_confirmed_residents", display = "cite")`)
+
+`r fig_nums("fig_KM_confirmed_residents")`
+
+```{r km_confirmed, fig.cap=fig_KM_confirmed_residents}
+km_confirmed <- tline %>% 
+  left_join(select(reference_homes, home_code, postcode)) %>% 
+  left_join(select(reference_geography, postcode, region_UK)) %>% 
+  filter(rday == 1 & susceptible_confirmed == 1) %>% 
+  mutate(home_type = factor(home_type, levels = c("Residential", "Nursing"))) %>% 
+  group_by(resident_id, dob, gender, region_UK,
+           home_type, user_type, funding_type, admission_type) %>% 
+  summarise(
+    start = as.numeric(min(date) - date_min),
+    end = max(date)
+  ) %>% 
+  left_join(select(timelines, resident_id, covid_first_positive)) %>% 
+  mutate(event = if_else(
+    is.na(covid_first_positive),
+    0L,
+    as.integer(covid_first_positive == end)
+  )) %>% 
+  mutate(
+    stop = as.numeric(end +1 - date_min),
+    ageg = cut_age_denary(compute_age(dob, date_min), age.min = 50, age.max = 100)
+  )
+
+survfit(Surv(time = start, 
+                   time2 = stop,
+                   event = event) ~ region_UK, data = km_confirmed) %>% 
+  ggsurvplot(., conf.int = TRUE, 
+           fun = "event",
+           legend = c(0.16, 0.6),
+           ggtheme = theme_bw(),
+           # TODO: double check labels at the end
+           break.x.by	= 7,
+           break.y.by = .02,
+           ylim = c(0, .17),
+           xlab  = paste0("Days since ", format(date_min, "%d %B %Y")),
+           ylab = "Cum probability of confirmed case",
+           legend.labs = sort(unique(km_confirmed$region_UK)),
+           conf.int.alpha = .1) 
+
+```
+
+
+`r fig_nums("fig_KM_confirmed_residents")`
+
+```{r KM_CT_residents_infection, fig.height = 5, fig.width = 10}
+
+residents_ct <- tibble(date = seq(date_min, date_max_tallies, 1)) %>% 
+  left_join(distinct(new_cases, date, home_code, 
+                     new_confirmed_home, new_confirmed_hospital)) %>% 
+  filter(!is.na(home_code)) %>% 
+  left_join(distinct(reference_homes, home_code, home_name_datix, postcode, staff_total, nursing_dementia, nursing_general, residential_dementia, residential_general, younger_person)) %>% 
+  left_join(select(reference_geography, postcode, region_UK)) %>% 
+  left_join(approx_occupancy) %>% 
+  arrange(date) 
+
+km_ct_residents_confirmed <- residents_ct %>% 
+  group_by(date, region_UK) %>% 
+  summarise(
+    confirmed = sum(tidyr::replace_na(new_confirmed_home, 0) + 
+                      tidyr::replace_na(new_confirmed_hospital, 0)),
+    occupancy = sum(tidyr::replace_na(susceptible_confirmed, 0))
+  ) %>% 
+  group_by(region_UK) %>% 
+  km_ct_estimator(df = ., t = date, d = confirmed, 
+                  pop = occupancy, subtract_cases = FALSE, overwrite = TRUE) %>% 
+  ungroup() %>% 
+  mutate(
+    St_max = S_t^exp(1.96*S_t_SElog),
+    St_min = S_t^exp(-1.96*S_t_SElog)
+  )
+
+order_key <-km_ct_residents_confirmed %>% 
+  group_by(region_UK) %>% 
+  summarise(S_t = min(S_t)) %>% 
+  arrange(S_t)
+km_ct_residents_confirmed$region_UK <- factor(
+  km_ct_residents_confirmed$region_UK,
+  levels = order_key$region_UK
+)
+km_ct_residents_confirmed$region_group <- cut(as.integer(km_ct_residents_confirmed$region_UK), 2, labels = 1:2)
+
+ggplot(aes(x = date, y = 1-S_t, 
+           ymax = 1 - St_max,
+           ymin = 1 - St_min,
+           color = region_UK), data = km_ct_residents_confirmed) +
+  # facet_grid(region_group ~ .) +
+  geom_ribbon(alpha=0.05, linetype = 2,stat = ) +
+  geom_path(lwd=1.2) +
+  scale_y_continuous("Cum probability confirmed case",
+                     breaks = seq(0,1,.02)) +
+  scale_color_discrete("Region") +
+  scale_x_date(name = "Date", 
+               breaks = unique(get_monday_date(km_ct_residents_confirmed$date)),
+               labels = format.Date(
+                 unique(get_monday_date(km_ct_residents_confirmed$date)),
+                 "%d/%m/%y"
+               )) +
+  theme_bw()
+
+```
+
+
+`r table_nums("tab_CoxPH_confirmed")`
+
+```{r CPH_confirmed, results="asis"}
+explanatory = c("gender", "ageg", "home_type", "region_UK")
+dependent = "Surv(time = start, time2 = stop, event = event)"
+km_confirmed %>%
+  finalfit(dependent, explanatory) -> CPH_confirmed
+knitr::kable(CPH_confirmed, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
+```
+
+
+
+## Staff symptomatic and confirmed cases
+
+```{r KM_Staff_Symptomatic, fig.height = 5, fig.width = 10}
+
+staff_ct <- tibble(date = seq(date_min, date_max_tallies, 1)) %>% 
+  left_join(distinct(new_cases, date, home_code, 
+                     new_colleague_confirmed, new_colleague_symptomatic)) %>% 
+  filter(!is.na(home_code)) %>% 
+  left_join(distinct(reference_homes, home_code, home_name_datix, postcode, staff_total, nursing_dementia, nursing_general, residential_dementia, residential_general, younger_person)) %>% 
+  left_join(select(reference_geography, postcode, region_UK)) %>% 
+  arrange(date) 
+
+km_staff_symptomatic <- staff_ct %>% 
+  group_by(date, region_UK) %>% 
+  summarise(
+    confirmed = sum(tidyr::replace_na(new_colleague_confirmed, 0)),
+    symptomatic = sum(tidyr::replace_na(new_colleague_symptomatic, 0)),
+    staff_total = sum(staff_total)
+  ) %>% 
+  group_by(region_UK) %>% 
+  km_ct_estimator(., t=date, d=symptomatic, pop=staff_total,subtract_cases = TRUE) %>% 
+  ungroup() %>% 
+  mutate(
+    St_max = S_t^exp(1.96*S_t_SElog),
+    St_min = S_t^exp(-1.96*S_t_SElog)
+  )
+
+order_key <-km_staff_symptomatic %>% 
+  group_by(region_UK) %>% 
+  summarise(S_t = min(S_t)) %>% 
+  arrange(S_t)
+km_staff_symptomatic$region_UK <- factor(
+  km_staff_symptomatic$region_UK,
+  levels = order_key$region_UK
+)
+km_staff_symptomatic$region_group <- cut(as.integer(km_staff_symptomatic$region_UK), 2, labels = 1:2)
+
+ggplot(aes(x = date, y = 1-S_t, 
+           ymax = 1 - St_max,
+           ymin = 1 - St_min,
+           color = region_UK), data = km_staff_symptomatic) +
+  # facet_grid(region_group ~ .) +
+  geom_ribbon(alpha=0.05, linetype = 2,stat = ) +
+  geom_path(lwd=1.2) +
+  scale_color_discrete("Region") +  
+  scale_y_continuous("Cum probability symptomatic case",
+                     breaks = seq(0,1,.02)) +
+  scale_x_date(name = "Date", 
+               breaks = unique(get_monday_date(km_staff_symptomatic$date)),
+               labels = format.Date(
+                 unique(get_monday_date(km_staff_symptomatic$date)),
+                 "%d/%m/%y"
+               )) +
+  theme_bw()
+  
+
+
+```
+
+
+
+```{r KM_Staff_Confirmed, fig.height = 7, fig.width = 10}
+km_staff_confirmed <- staff_ct %>% 
+  group_by(date, region_UK) %>% 
+  summarise(
+    confirmed = sum(tidyr::replace_na(new_colleague_confirmed, 0)),
+    symptomatic = sum(tidyr::replace_na(new_colleague_symptomatic, 0)),
+    staff_total = sum(staff_total)
+  ) %>% 
+  group_by(region_UK) %>% 
+  km_ct_estimator(., date, confirmed, staff_total) %>% 
+  ungroup() %>% 
+  mutate(
+    St_max = S_t^exp(1.96*S_t_SElog),
+    St_min = S_t^exp(-1.96*S_t_SElog)
+  )
+
+order_key <- km_staff_confirmed %>% 
+  group_by(region_UK) %>% 
+  summarise(S_t = min(S_t)) %>% 
+  arrange(S_t)
+km_staff_confirmed$region_UK <- factor(
+  km_staff_confirmed$region_UK,
+  levels = order_key$region_UK
+)
+km_staff_confirmed$region_group <- cut(as.integer(km_staff_confirmed$region_UK), 2, labels = 1:2)
+
+
+ggplot(aes(x = date, y = 1-S_t, 
+           ymax = 1 - St_max,#(S_t + 1.96 * S_t_SE),
+           ymin = 1 - St_min, #(S_t - 1.96 * S_t_SE),
+           color = region_UK), data = km_staff_confirmed) +
+  facet_grid(region_group ~ .) +
+  geom_ribbon(alpha=0.05, linetype = 2,stat = ) +
+  geom_path(lwd=1.2) +
+  scale_color_discrete("Region") +
+  ylab("Pr confirmed case") +
+  scale_x_date(name = "Date", 
+               breaks = unique(get_monday_date(km_staff_confirmed$date)),
+               labels = format.Date(
+                 unique(get_monday_date(km_staff_confirmed$date)),
+                 "%d/%m/%y"
+               )) +
+  theme_bw()
+
+```
+
+# Declarations
+
+## Funding 
+
+This work was supported by the Economic and Social Research Council [grant reference ES/V003887/1].
+
+## Research ethics
+
+This study was approved by the University College London Research Ethics Committee (project reference 13355/002).
+
+
+# References
