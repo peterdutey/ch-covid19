@@ -480,6 +480,11 @@ extract_tallies <- function() {
   if(!file.exists(file.path(getOption("fshc_files"), "reference_homes.rda"))) {
     extract_reference_homes()
   }
+  if(!file.exists(file.path(getOption("fshc_files"), "residents.rda"))) {
+    extract_residents()
+  }
+
+  load(file.path(getOption("fshc_files"), "residents.rda"))
 
   files <- list.files(file.path(getOption("FSHC_EXTRACTS_DIRECTORY"), "tallies"), full.names = T)
   new_filepath <- sort(grep("tally_new_cases.*csv$", files, value = T), decreasing = T)[1]
@@ -491,12 +496,12 @@ extract_tallies <- function() {
   names(new_cases) <- tolower(names(new_cases))
   new_cases$date <- lubridate::dmy(new_cases$date)
   new_cases$time <- lubridate::dmy_hm(new_cases$time)
-  new_cases <- dplyr::filter(new_cases, !home_code %in% c("LAH", "SIL"))
+  new_cases <- dplyr::filter(new_cases, home_code %in% residents$home_code)
 
   names(total_cases) <- tolower(names(total_cases))
   total_cases$date <- lubridate::dmy(total_cases$date)
   total_cases$time <- lubridate::dmy_hm(total_cases$time)
-  total_cases <- dplyr::filter(total_cases, !home_code %in% c("LAH", "SIL"))
+  total_cases <- dplyr::filter(total_cases, home_code %in% residents$home_code)
 
   # Merge Gilmerton NCC within 565	Gilmerton
   # Rid of Holybourne Day Centre (closed)
@@ -507,8 +512,8 @@ extract_tallies <- function() {
   new_cases$home_code[new_cases$home_code == "GIL"] <- "565"
   new_cases <- dplyr::filter(new_cases, home_code != "240")
 
-  check_homes(unique(total_cases$home_code))
-  check_homes(unique(new_cases$home_code))
+  check_homes(unique(total_cases$home_code), call = "`total_cases`")
+  check_homes(unique(new_cases$home_code), call = "`new_cases`")
 
   save(total_cases, file = file.path(getOption("fshc_files"), "total_cases.rda"))
   usethis::ui_done("total_cases.rda")
