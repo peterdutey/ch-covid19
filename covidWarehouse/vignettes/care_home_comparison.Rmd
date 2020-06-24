@@ -21,7 +21,6 @@ st_options(
 )
 source("../.Rprofile")
 devtools::load_all("..")
-extract_data()
 load_data()
 library(ggplot2)
 library(plotly)

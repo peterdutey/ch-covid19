@@ -294,7 +294,7 @@ extract_residents <- function() {
   residents_src <- clean_variable_names(residents_src)
   # Removing Jersey
   residents_src <- dplyr::rename(residents_src, home_code = home_id)
-  residents_src <- dplyr::filter(residents_src, !home_code %in% c("LAH", "SIL"))
+  residents_src <- dplyr::filter(residents_src, !home_code %in% c("365", "LAH", "SIL"))
 
   residents <- residents_src
   for(i in grep("(_date)|(date_of)|(dob)", names(residents))){
@@ -336,6 +336,12 @@ extract_residents <- function() {
   residents$admission_type <- trimws(residents$admission_type)
   residents$funding_type <- trimws(residents$funding_type)
   residents <- merge(residents, home_types, all.x = TRUE)
+  residents <- dplyr::mutate(residents,
+                             gender = dplyr::case_when(
+                               trimws(gender) == "M" ~ "Male",
+                               trimws(gender) == "F" ~ "Female",
+                               TRUE ~ NA_character_
+                             ))
 
   residents <- dplyr::distinct(residents) %>%
     dplyr::rename(resident_id = encrypted_id)

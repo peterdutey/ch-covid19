@@ -16,13 +16,13 @@ test_that("min_non_missing", {
 test_that("age_groups", {
   expect_equal(as.character(cut_age_denary(29)), "<40 years")
 
-  expect_equal(as.character(cut_age_denary(102)), "100-109 years")
+  expect_equal(as.character(cut_age_denary(102)), "100–109 years")
   expect_equal(as.character(cut_age_denary(150)), NA_character_)
 
-  expect_equal(as.character(cut_age_quinary(102)), "100-104 years")
+  expect_equal(as.character(cut_age_quinary(102)), "100–104 years")
   expect_equal(as.character(cut_age_quinary(150)), NA_character_)
 
-  expect_equal(as.character(cut_age_pentadecimal(102)), "90-104 years")
+  expect_equal(as.character(cut_age_pentadecimal(102)), "100–114 years")
   expect_equal(as.character(cut_age_pentadecimal(150)), NA_character_)
 
 

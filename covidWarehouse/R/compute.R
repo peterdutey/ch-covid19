@@ -15,7 +15,7 @@ cut_age_denary <- function(age, age.min = 40, age.max = 130) {
       labels = c(
         paste0("<", age.min, " years"),
         paste0(
-          seq(age.min, age.max-1, 10), "-",
+          seq(age.min, age.max-1, 10), "–",
           seq(age.min+9, age.max-1, 10), " years"),
         paste0(age.max, "+ years"))
     )
@@ -29,24 +29,26 @@ cut_age_quinary <- function(age) {
       include.lowest = FALSE,
       right = FALSE,
       labels = c(paste0(
-        seq(30, 130, 5), "-",
+        seq(30, 130, 5), "–",
         seq(34, 134, 5), " years"),
         "135+ years")
     )
 }
 
-cut_age_pentadecimal <- function(age) {
+cut_age_pentadecimal <- function(age, age.min = 40, age.max = 130) {
 
-    cut(
-      x = age,
-      breaks = c(seq(30, 135, 15), 150),
-      include.lowest = FALSE,
-      right = FALSE,
-      labels = c(paste0(
-        seq(30, 129, 15), "-",
-        seq(44, 135, 15), " years"),
-        "135+ years")
-    )
+  cut(
+    x = age,
+    breaks = c(0, seq(age.min, age.max, 15), 150),
+    include.lowest = FALSE,
+    right = FALSE,
+    labels = c(
+      paste0("<", age.min, " years"),
+      paste0(
+        seq(age.min, age.max-1, 15), "–",
+        seq(age.min+14, age.max-1, 15), " years"),
+      paste0(age.max, "+ years"))
+  )
 }
 
 tbrounding <- function(x, places = 1){

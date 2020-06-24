@@ -196,7 +196,7 @@ ch_data <- table_weekly_cases_home()
 ch_data_all <- ch_data %>% 
   dplyr::group_by(home_code, home_name_datix, home_name_clickview) %>% 
   dplyr::summarise(
-    resident_days = sum(occupancy_imputed, na.rm = T),
+    resident_days = sum(resident_days_imputed, na.rm = T),
     first_symptomatic = sum(first_symptomatic, na.rm = T),
     tally_first_symptomatic = sum(tally_first_symptomatic, na.rm = T),
     first_confirmed = sum(first_confirmed, na.rm = T),

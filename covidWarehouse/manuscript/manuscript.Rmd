@@ -1,24 +1,17 @@
 ---
-title: "Incidence and period prevalence of confirmed COVID-19 cases in care home staff and residents: Cohort study of secondary use records in a large care home provider in England, Scotland and Northern Ireland (March-June 2020)"
+title: "Incidence and period prevalence of confirmed COVID-19 cases in care home staff and residents: Cohort study using electronic records in a large UK care home provider (March-June 2020)"
 # author: "Dutey-Magni, PF, Williams, H, Hayward, A, Shallcross, L"
 date: "16/06/2020"
 bibliography: references.bib
-csl: sage-vancouver.csl
+csl: elsevier-vancouver.csl
 output:
-  word_document:
-    toc: yes
-    reference_docx: template.docx
-  pdf_document:
-    citation_package: natbib
-    df_print: kable
-    fig_caption: yes
-    keep_tex: yes
-    number_sections: yes
-    toc: yes
   html_document:
     df_print: paged
     toc: yes
     code_folding: hide
+  word_document:
+    toc: yes
+    reference_docx: template.docx
 link-citations: yes
 always_allow_html: yes
 ---
@@ -59,13 +52,25 @@ date_max_tallies = as.Date("2020-06-07")
 ```
 
 ```{r descriptives}
+
+tline <- dplyr::bind_rows(timelines$timeline)
+stopifnot(unique(tline$date_end)>=date_max)
+tline <- filter(tline, between(date, date_min, date_max)) %>% 
+  mutate(user_type2 = case_when(
+    user_type %in% c("General", "Elderly") ~ "General/elderly",
+    user_type == "Dementia" ~ "Dementia",
+    TRUE ~ NA_character_ ))
+
+home_inclusion <- unique(tline$home_code)
+
 reference_homes <- reference_homes %>% 
+  filter(home_code %in% home_inclusion) %>% 
   left_join(select(filter(beds, year=="2020"), -year)) %>% 
   mutate(staff_to_bed_ratio = staff_total/beds,
-         carer_to_bed_ratio = (reference_homes$staff_care_assistants + reference_homes$staff_nurses)/beds,
+         carer_to_bed_ratio = (staff_care_assistants + staff_nurses)/beds,
          bed_tot_category = cut(.$beds, 
-           breaks = seq(20,100,15), right = F, 
-           paste0(seq(20, 80, 15), "-", seq(34, 94, 15), " beds"))) 
+           breaks = seq(20,100,25), right = F, 
+           paste0(seq(20, 80, 25), "–", seq(34, 94, 25), " beds"))) 
 
 homes_country <- select(reference_homes, home_code, postcode) %>% 
   left_join(transmute(reference_geography, postcode, 
@@ -73,8 +78,12 @@ homes_country <- select(reference_homes, home_code, postcode) %>%
   mutate(region_UK = if_else(country == "England", region_england, country)) %>% 
   select(-postcode)
 
+reference_homes <- left_join(reference_homes, homes_country)
+ 
 incidents <- incidents %>% 
-  dplyr::filter(dplyr::between(incident_date, date_min, date_max)) #%>% 
+  filter(dplyr::between(incident_date, date_min, date_max)) %>% 
+  filter(home_code %in% home_inclusion)
+
 
 desc_before_exclusions <- list()
 desc_before_exclusions$nrow_incidents <- nrow(incidents)
@@ -92,12 +101,8 @@ desc_before_exclusions$link_fail_pct <- tbrounding(
 incidents <- filter(incidents, !grepl("^MISSING", resident_id)) %>% 
   filter(resident_id %in% unique(residents$resident_id))
 
-tline <- dplyr::bind_rows(timelines$timeline)
-stopifnot(unique(tline$date_end)>=date_max)
-tline <- filter(tline, between(date, date_min, date_max)) 
-
 new_cases <- filter(new_cases, between(date, date_min, date_max_tallies)) %>% 
-    filter(home_code %in% unique(residents$home_code)) 
+    filter(home_code %in% home_inclusion)
 
   
 approx_occupancy <- tline %>% 
@@ -109,18 +114,18 @@ approx_occupancy <- tline %>%
 
 approx_occupancy <- merge(
   tibble(date = seq(date_min, date_max, 1)),
-  tibble(home_code = unique(reference_homes$home_code)),
+  tibble(home_code = home_inclusion),
   all = TRUE) %>% 
   left_join(approx_occupancy)
 
 desc_residents <- tline %>% 
   filter(rday == 1)  %>% 
   group_by(resident_id, home_code, dob, gender, 
-           admission_type, home_type, user_type, status) %>% 
+           admission_type, home_type, user_type2, status) %>% 
   summarise(resident_days = sum(rday),
             susceptible_symptomatic_days = sum(susceptible_symptomatic),
             susceptible_confirmed_days = sum(susceptible_confirmed)) %>% 
-  mutate(ageg = cut_age_denary(compute_age(dob, date_min), age.min = 50, age.max = 100)) %>% 
+  mutate(ageg = cut_age_denary(compute_age(dob, date_min), age.min = 75, age.max = 95)) %>% 
   left_join(homes_country, by = "home_code")
 
 res_counts <- desc_residents %>% 
@@ -128,8 +133,6 @@ res_counts <- desc_residents %>%
   summarise(unique_residents = n_distinct(resident_id))
 
 desc_homes <- reference_homes %>% 
-  filter(home_code %in% unique(residents$home_code)) %>% 
-  left_join(transmute(reference_geography, country, postcode), by = "postcode") %>% 
   left_join(res_counts, by = "home_code") %>%
   mutate(Scope = paste("FSHCG", country)) %>% 
   group_by(Scope) %>% 
@@ -146,7 +149,6 @@ desc_national <- tibble(
   `Total contract beds` = NA_integer_,
   `Total residents` = c(NA, 35989, NA)
 )
-
 
 
 desc_overall <- list()
@@ -234,30 +236,38 @@ tab_CoxPH_confirmed <- table_nums(
   caption =  paste0("Factors associated with the hazard of become a confirmed case: hazard ratios (HR) from a Cox proportional hazards model (n=", 
   formatbm(dplyr::n_distinct(desc_residents$resident_id)),
   ")"))
-
+tab_CoxPH_death <- table_nums(
+  name = "tab_CoxPH_death",
+  caption =  paste0("Factors associated with all-cause mortality: hazard ratios (HR) from a Cox proportional hazards model (n=", 
+  formatbm(dplyr::n_distinct(desc_residents$resident_id)),
+  ")"))
 ## FIGURES
 fig_nums <- captioner(prefix = "Figure")
 
 fig_KM_CT_residents_symptomatic <- fig_nums(
-  name = "KM_CT_residents_symptomatic",
-  caption = paste0("Kaplan-Meier estimator of the cumulative probability of residents becoming symptomatic based on care home manager daily counts")
+  name = "fig_KM_CT_residents_symptomatic",
+  caption = paste0("Kaplan-Meier estimates of the cumulative probability of residents becoming symptomatic based on care home manager daily counts")
 )
 fig_KM_residents_confirmed <- fig_nums(
   name = 'fig_KM_residents_confirmed',
-  caption = paste0("Kaplan-Meier estimator of the cumulative probability of residents (n=",
+  caption = paste0("Kaplan-Meier estimates of the cumulative probability of residents (n=",
   formatbm(dplyr::n_distinct(desc_residents$resident_id)),
   ") becoming confirmed cases based on Datix incidents report"))
 fig_KM_CT_confirmed_residents <- fig_nums(
   name = 'fig_KM_CT_confirmed_residents',
-  caption = "Kaplan-Meier estimator of the cumulative probability of residents becoming confirmed cases based on care home manager daily counts")
-
+  caption = "Kaplan-Meier estimates of the cumulative probability of residents becoming confirmed cases based on care home manager daily counts")
+fig_KM_mortality <- fig_nums(
+  "fig_KM_mortality",
+  caption = paste0("Kaplan-Meier estimates of resident (n=",
+  formatbm(dplyr::n_distinct(desc_residents$resident_id)),
+  ") survival by SARS-COV-2 case type"))
 fig_KM_staff_symptomatic <- fig_nums(
   name = 'fig_KM_staff_symptomatic',
-  caption = paste0("Kaplan-Meier estimator of the cumulative probability of care home staff (n=",   formatbm(desc_overall$total_staff),
+  caption = paste0("Kaplan-Meier estimates of the cumulative probability of care home staff (n=",   formatbm(desc_overall$total_staff),
   ") becoming symptomatic cases based on manager-reported daily counts"))
 fig_KM_staff_confirmed <- fig_nums(
   name = 'fig_KM_staff_confirmed',
-  caption = paste0("Kaplan-Meier estimator of the cumulative probability of care home staff (n=",   formatbm(desc_overall$total_staff),
+  caption = paste0("Kaplan-Meier estimates of the cumulative probability of care home staff (n=",   formatbm(desc_overall$total_staff),
   ") becoming confirmed cases based on manager-reported daily counts"))
 
 ```
@@ -273,27 +283,29 @@ england_results <- list()
 england_results$n_positive = sum(inner_join(new_cases, filter(homes_country, country == "England"))[c("new_confirmed_home", "new_confirmed_hospital")], na.rm = T)
 england_results$n_negative = n_distinct(inner_join(residents, filter(homes_country, country == "England"))$resident_id) - england_results$n_positive
 
-RR_england <- (
-  england_results$n_positive / (england_results$n_positive + england_results$n_negative)
-  ) / (
-  cis_data$n_positive / (cis_data$n_positive + cis_data$n_negative)
-)
 
-RR_SE <- sqrt(
-  1/england_results$n_positive  + 
-    1/cis_data$n_positive +
-    1/(england_results$n_positive + england_results$n_negative) +
-    1/(cis_data$n_positive + cis_data$n_negative)
-)
+
+RR_england <- relative_risk(
+  a = england_results$n_positive,
+  b = england_results$n_negative,
+  c = cis_data$n_positive,
+  d = cis_data$n_negative)
+
+
+RR_SE <- relative_risk_SE(
+  a = england_results$n_positive,
+  b = england_results$n_negative,
+  c = cis_data$n_positive,
+  d = cis_data$n_negative)
 ```
 
 # Abstract
 
-**Background** COVID-19 causes significant mortality in elderly and vulnerable people and spreads easily in care homes. Scarce evidence is available on epidemiological trends in this setting. This study reports on data obtained from the Four Seasons Health Care Group (FSHCG), an independent provider of long-term and respite residential and nursing care representing 9% of all beds in England, Scotland and Northern Ireland. 
+**Background** COVID-19 has caused substantial morbidity and mortality in care home residents and staff. National surveys suggest infection is declining in the general population in the UK, but outbreaks persist in care homes. Epidemiological data on disease trends in care home staff and residents are scarce. We used administrative data from the Four Seasons Health Care Group (FSHCG), a national care home chain representing 9% of all beds in England, Scotland and Northern Ireland. 
 
-**Methods:** Secondary use datasets were obtained from FSHCG. Individual-level records on residents and COVID-19 related events are investigated to estimate the incidence and period prevalence of symptoms, confirmed case, and death. Findings are compared with aggregate counts reported daily by care home managers to FSHCG as well as with findings from a national community survey.
+**Methods:** Retrospective cohort study using individual-level electronic records from residents (incidents reports) and daily care home counts of infection for both residents and staff. We estimated the incidence and period prevalence of symptoms, confirmed infection, and death in residents and staff, and compare them with findings from a national community survey. We tested a range of risk factors for resident infections in multivariate regression models.
 
-**Findings:** Records of `r formatbm(n_distinct(desc_residents$resident_id))` residents present in FSHCG homes between `r format(date_min, "%e %B %Y")` and `r format(date_max, "%e %B %Y")` were analysed. The period prevalence of COVID-19 symptoms is comprised between`r tbrounding(desc_overall$DAT_p_symptomatic*100)`% (based on incidents reports) and `r tbrounding(desc_overall$CT_p_symptomatic*100)`% (based on manager-reported counts). Across the period, managers registered a total of `r formatbm(desc_overall$CT_total_confirmed)` (`r tbrounding(desc_overall$CT_p_confirmed*100)`% [`r tbrounding((desc_overall$CT_p_confirmed - desc_overall$CT_p_confirmed_ME)*100)`; `r tbrounding((desc_overall$CT_p_confirmed + desc_overall$CT_p_confirmed_ME)*100)`]) cases confirmed with a naropharyngeal RNA test. Datix incidents reported just `r formatbm(desc_overall$CT_total_confirmed)` confirmed cases. In England, `r england_results$n_positive` confirmed cases occurred out of a total `r formatbm(england_results$n_positive + england_results$n_negative)` residents. Comparing with the community, the relative risk of confirmed cases in England was `r tbrounding(RR_england)` [`r tbrounding(exp(log(RR_england) - 1.96 * RR_SE)) `; `r tbrounding(exp(log(RR_england) + 1.96 * RR_SE))`]. The staff-to-bed ratio was the only factor to be independently associated with the rate of confirmed cases: an increase by 10 percentage point in the number of staff relative to the bed total was associated with a 13% reduction [9%, 18%] in the rate of confirmed cases.
+**Findings:** Records were available for `r formatbm(n_distinct(desc_residents$resident_id))` residents present in `r dplyr::n_distinct(residents$home_code)` FSHCG homes between `r format(date_min, "%e %B %Y")` and `r format(date_max, "%e %B %Y")`. The period prevalence of COVID-19 symptoms ranged between `r tbrounding(desc_overall$DAT_p_symptomatic*100)`% (based on incidents reports) and `r tbrounding(desc_overall$CT_p_symptomatic*100)`% (based on manager-reported counts). Across the period, care homes registered a total of `r formatbm(desc_overall$CT_total_confirmed)` (`r tbrounding(desc_overall$CT_p_confirmed*100)`% [`r tbrounding((desc_overall$CT_p_confirmed - desc_overall$CT_p_confirmed_ME)*100)`%; `r tbrounding((desc_overall$CT_p_confirmed + desc_overall$CT_p_confirmed_ME)*100)`%]) infections confirmed with naropharyngeal RNA tests. Incident reports accounted just `r formatbm(desc_overall$unique_residents_test_result_positive)` confirmed infections. In England, `r england_results$n_positive` infections were confirmed of a total `r formatbm(england_results$n_positive + england_results$n_negative)` residents. Comparing with the community, the relative risk of confirmed cases in England was `r tbrounding(RR_england)` [`r tbrounding(exp(log(RR_england) - 1.96 * RR_SE)) `; `r tbrounding(exp(log(RR_england) + 1.96 * RR_SE))`]. The staff-to-bed ratio was the only factor to be independently associated with the rate of confirmed cases: an increase by 10 percentage point in the number of staff relative to the bed total was associated with a 13% reduction [9%, 18%] in the rate of confirmed cases.
 
 **Interpretation** Despite uncertain case ascertainment in care homes, internal surveillance suggests a greater transmission than in the community. Staffing may impact care homes' response to outbreaks and in turn influence rates of confirmed cases. The absence of high-quality case ascertainment hinders local infection prevention initiatives which could be better supported by laboratory data surveillance.
 
@@ -301,22 +313,32 @@ RR_SE <- sqrt(
 
 # Background 
 
-COVID-19 causes significant mortality in elderly and vulnerable people and spreads easily in care homes where one in seven individuals aged 85 years and over live. However, there is no surveillance for infection in care homes, nor are there systems (or research studies) monitoring the impact of the pandemic on individuals or systems. Usual practices are disrupted during the pandemic, and care home staff are taking on new and unfamiliar roles, such as advanced care planning. Understanding the nature of these changes is critical to mitigate the impact of COVID-19 on residents, relatives and staff.
+Care home residents are extremely vulnerable to infection due to their advanced age and high prevalence of comorbidity, and this is compounded by frequent exposure to infection, for example through contact with infected staff members. At the peak of the pandemic the number of deaths in UK care home residents was threefold higher than the equivalent period in 2019,[@onsDR2020] but estimates of infection incidence and prevalence over this time period are lacking due to delays in establishing universal testing for care home residents and staff. 
 
-This study reports on data obtained from the Four Seasons Health Care Group (FSHCG), one of the UK's largest independent provider of long-term and respite residential and nursing care. In 2020, FSHCG represented approximately 9% of all beds in England, Scotland and Northern Ireland (`r table_nums("tab_national_descriptives", display = "cite")`)). FSHCG residents underwent reverse transcriptase polymerase chain reaction (RT-PCR) viral antigen diagnostics based on nose and throat swab antigen tests during hospitalisations in the first instance, but such tests later became available in care homes from ***XXXXX***. From 11 May 2020, FSHCG home undertook testing every resident. ***(Haydn, more detail would be greatly appreciated)***
- 
-`r table_nums("tab_national_descriptives")` @cqcdata2020,@hscni2020,@isd2020
+For example, at the start of the pandemic, testing for SARS-CoV-2 infection testing using reverse transcriptase polymerase chain reaction (RT-PCR) was only routinely available for care home residents or staff who were admitted to hospital. Testing was also performed in care homes that notified an outbreak to Public Health England, but this was limited to a maximum of five test per care home.  Widespread testing for residents first became available on 11 May 2020 through the whole care home testing programme. [@dhscTesting2020] Consequently national estimates of incidence and prevalence based on test results obtained prior to 11 May will substantially underestimate the burden of infection in care home residents.  
+
+An important source of epidemiological data on the burden of disease in care homes are outbreak investigations.[@McMichael2020] One such investigation estimated that 50% of residents and 20% of staff are infected during an outbreak in London, UK.[@Easter6] Estimates of this nature cannot be generalised to the unknown proportion of care homes that have not reported any outbreaks.
+
+Information on disease incidence and prevalence, and how this varies by care home is essential to inform the public health response to future waves of infection, and in particular decisions around the need for widespread universal testing in care home staff and residents. 
+
+This study obtained data from `r formatbm(dplyr::n_distinct(residents$home_code))` care homes from the Four Seasons Health Care Group (FSHCG), one of the UK's largest independent provider of long-term and respite residential and nursing care. It estimated incidence and period prevalence of COVID-19 events. In addition, it tested and identified individual and organisational risk factors associated with the rate of confirmed infections. 
+
+# Methods
+
+In 2020, FSHCG represented approximately 9% of all beds in England, Scotland and Northern Ireland (`r table_nums("tab_national_descriptives", display = "cite")`)). As of 22 June 2020, 90% of FSHCG care homes have participated in the whole care home testing programme. 
+
+FSHCG collects administrative data on their residents through a variety of electronic systems that are primarily used for billing purposes. This includes individual-level data on the dates of care home entry and exit for residents, demographic information, and reports of infection through an incidents management system known as "Datix". 
+
+`r table_nums("tab_national_descriptives")` [@cqcdata2020; @hscni2020; @isd2020]
 
 ```{r table_national_descriptives, fig.cap = tab_national_descriptives, message=F}
 mutate_all(desc_homes,  .funs = formatbm) %>% arrange(gsub("FSHC ", "", Scope)) %>% t %>% kable
 ``` 
 
-# Methods
-
 
 ## Individual-level residents data
 
-Secondary use individual-level data were extracted and pseudonymised by HW. They consisted of:
+Secondary use individual-level data were extracted and pseudonymised by HW. They consisted of two datasets:
 
 - **a residents dataset** containing one record per resident per care home, alongside residents' gender, date of birth, most recent dates of admission and discharge, date of first admission, type of stay (residential/nursing) and care (general, dementia, elderly). This dataset does not include any records for occupants of local authority 'block contract' beds  ($n=$ `r formatbm(sum(desc_homes[["Total contract beds"]], na.rm=T))`).
 - **an incidents dataset** containing `r formatbm(desc_before_exclusions$nrow_incidents)` reports filed by care home staff into FSHCG's Datix incidents management system. Mandated report field were: resident forename, surname, care home identifier, incident date/time, and date/time of reporting. In addition, reports can include: date of birth, gender, information on COVID-19 symptoms, tests and test results, resident current location (home/hospital), and death.
@@ -325,7 +347,10 @@ HW created a resident index file bridging the two datasets using: the first thre
 
 ## Aggregate data
 
-Daily counts reported by care home managers to FSHCG were obtained for every care home:
+We obtained care home organisational characteristics: staff headcounts, bed counts, ***latest Care Quality Commission rating***, and types of care available (nursing dementia; nursing general; residential dementia; residential general; younger person).
+ 
+On 24 March 2020, FSHCG introduced an additional system to monitor COVID-19 cases in each care home, requiring care home managers to report daily tallies of suspected and confirmed infection in staff and residents to their regional manager. 
+Daily counts reported by care homes to FSHCG were obtained for every care home:
 
 - new symptomatic cases (residents)
 - new confirmed cases in home (residents)
@@ -339,15 +364,17 @@ These counts include events relating to occupants of local authority contract be
 
 ## Analysis
 
-We estimate the incidence of symptomatic and confirmed cases as well as deaths using the individual-level data. Doing so enables us to accurately account for the duration of exposure in resident-days as well as right-censoring, since individual records indicate when a resident was discharged or died. In order to study the effect of potential risk factors, total cases and resident-days were aggregated by care home by care type and demographic characteristics and regressed in a Poisson hierarchical level with care home and time independent and identically distributed random effects. This provides measures of relative risks.
+We used individual-level incident reports and daily tallies to generate estimates of disease incidence in residents and period prevalence in residents and staff. Death status as of `r format(date_max, "%e %B %Y")` was used to estimate the case-fatality rate and the relative risks of all-cause death in confirmed cases . The individual data provided an accurate of the duration of exposure in resident-days as well as right-censoring, since individual records indicate when a resident was discharged or died. A Cox proportional hazards model was used to test the effect of potential risk factors, whether individual- (sex, age, care type) or organisation-level (region, care home size, staff-to-bed ratio).
 
-However, a Datix report may not have been filed for every event. We therefore also estimate the incidence and period prevalence of events using manager counts, using the total resident-days denominator derived from the individual-level data. 
+We also investigated whether the number of confirmed infections among staff was associated with subsequent infections amongst residents, independently of time. For this, we regressed. 
 
-The incidence of confirmed cases in England is contrasted with incidence measured from a sample survey of English private households which tested nose/throat swabs from 26,995 individuals between 26 April and 13 June 2020 [@cisbulletin2020; @cisdata2020].
+However, a Datix report may not have been filed for every event. We therefore also estimate the incidence and period prevalence of events using manager counts, using the total resident-days denominator derived from the individual-level data.
 
-Data were analysed in `R`3·5·0 @RCoreTeam2018 and the `survival` package @therneau2015. All computer syntax is available on an online repository @Dutey2020.
+The incidence of confirmed cases in England is contrasted with incidence measured from a sample survey of English private households which tested nose/throat swabs from 26,995 individuals between 26 April and 13 June 2020.[@cisbulletin2020; @cisdata2020]
 
-# Results
+Data were analysed in `R`3·5·0[@RCoreTeam2018] and the `survival` package.[@therneau2015] All computer syntax is available on an online repository.[@Dutey2020]
+
+# Findings
 
 ## Descriptives
 
@@ -359,7 +386,7 @@ Datix reports and manager counts respectively indicated that `r formatbm(desc_ov
 
 ```{r table_resident_descriptives, message = FALSE, results="asis"}
 arsenal::tableby(home_type  ~ gender + ageg + region_UK +
-                                 user_type + admission_type + status, 
+                                 user_type2 + admission_type + status, 
                                data = desc_residents) %>% summary()
 ```
 
@@ -423,20 +450,22 @@ ggplot(aes(x = date, y = 1-S_t,
 
 ```
 
-`r fig_nums("KM_CT_residents_symptomatic")`
+`r fig_nums("fig_KM_CT_residents_symptomatic")`
 
 
 
 ## Resident confirmed cases
 
+FSHCG residents underwent reverse transcriptase polymerase chain reaction (RT-PCR) viral antigen diagnostics based on nose and throat swab antigen tests during hospitalisations in the first instance, but such tests later became available in care homes from ***XXXXX***. From 11 May 2020, most FSHCG home undertook testing every resident as part of the whole home testing programme.[@dhscTesting2020]
+
 Datix incidents reports accounted for `r formatbm(desc_overall$unique_residents_tested)` residents tested at least once. Test results were known for `r formatbm(desc_overall$unique_residents_test_result)` of them (`r tbrounding(desc_overall$unique_residents_test_result/desc_overall$unique_residents_tested*100)`%), including `r formatbm(desc_overall$unique_residents_test_result_positive)` residents with a positive test result. This data should be treated as representative, as tests coming back negative are not commonly recorded on Datix. Care home manager daily counts of new confirmed cases added up to `r formatbm(sum(new_cases$new_confirmed_home, na.rm = T))` cases tested in homes and `r formatbm(sum(new_cases$new_confirmed_hospital, na.rm = T))` tested in hospitals. The temporal trend of confirmed cases broken down by region is presented using both Datix reports (`r fig_nums("fig_KM_residents_confirmed", display = "cite")`) and manager counts (`r fig_nums("fig_KM_CT_confirmed_residents", display = "cite")`).
 
-
-For England only, a total of `r england_results$n_positive` confirmed cases occurred out of a total `r formatbm(england_results$n_positive + england_results$n_negative)` residents. In comparison, the survey of English community households @cisbulletin2020 found a total of `r cis_data$n_positive` confirmed cases out of `r formatbm(cis_data$n_positive + cis_data$n_negative)` sampled individuals. This implies a relative risk of `r tbrounding(RR_england)` [`r tbrounding(exp(log(RR_england) - 1.96 * RR_SE)) `; `r tbrounding(exp(log(RR_england) + 1.96 * RR_SE))`].
+For England only, a total of `r england_results$n_positive` confirmed cases occurred out of a total `r formatbm(england_results$n_positive + england_results$n_negative)` residents. In comparison, the survey of English community households[@cisbulletin2020] found a total of `r cis_data$n_positive` confirmed cases out of `r formatbm(cis_data$n_positive + cis_data$n_negative)` sampled individuals. This implies a relative risk of `r tbrounding(RR_england)` [`r tbrounding(exp(log(RR_england) - 1.96 * RR_SE)) `; `r tbrounding(exp(log(RR_england) + 1.96 * RR_SE))`].
 
 
 
 ```{r km_confirmed, fig.height=4,fig.width=8}
+
 km_confirmed <- tline %>% 
   left_join(select(reference_homes, home_code, postcode, 
                    staff_to_bed_ratio, carer_to_bed_ratio, bed_tot_category)) %>% 
@@ -444,7 +473,7 @@ km_confirmed <- tline %>%
   filter(rday == 1 & susceptible_confirmed == 1) %>% 
   mutate(home_type = factor(home_type, levels = c("Residential", "Nursing"))) %>% 
   group_by(resident_id, dob, gender, region_UK, home_code,
-           home_type, user_type, funding_type, admission_type, 
+           home_type, user_type2, funding_type, admission_type, 
            staff_to_bed_ratio, carer_to_bed_ratio, bed_tot_category) %>% 
   summarise(
     start = as.numeric(min(date) - date_min),
@@ -458,7 +487,7 @@ km_confirmed <- tline %>%
   )) %>% 
   mutate(
     stop = as.numeric(end +1 - date_min),
-    ageg = cut_age_denary(compute_age(dob, date_min), age.min = 50, age.max = 100)
+    ageg = cut_age_denary(compute_age(dob, date_min), age.min = 75, age.max = 95)
   )
 
 survfit(Surv(time = start, 
@@ -542,7 +571,7 @@ ggplot(aes(x = date, y = 1-S_t,
 `r fig_nums("fig_KM_CT_confirmed_residents")`
 
 
-Between `r desc_overall$DAT_zero_case` (`r tbrounding( sum(home_zero_confirmed$zero_datix)/ sum(home_zero_confirmed[["Total homes"]])*100)`%) and  `r desc_overall$CT_zero_case` (`r tbrounding(sum(home_zero_confirmed$zero_CT)/sum(home_zero_confirmed[["Total homes"]])*100)`%) care homes had not accounted any confirmed cases whether in the home or in hospital (`r table_nums("tab_zero_cases", display="cite")`). Yet the significant conflict between the two sources of data makes it difficult to ascertain which care homes had not had any confirmed cases without querying the national laboratory information systems.
+Between `r desc_overall$DAT_zero_case` (`r tbrounding( sum(home_zero_confirmed$zero_datix)/ sum(home_zero_confirmed[["Total homes"]])*100)`%) and  `r desc_overall$CT_zero_case` (`r tbrounding(sum(home_zero_confirmed$zero_CT)/sum(home_zero_confirmed[["Total homes"]])*100)`%) care homes had not accounted any confirmed cases whether in the home or in hospital (`r table_nums("tab_zero_cases", display="cite")`). The substantial lack of agreement between the two sources of data makes it difficult to ascertain which care homes had not had any confirmed cases.
 
 `r table_nums("tab_zero_cases")`
 
@@ -575,20 +604,102 @@ Using the individual-level data, factors affecting the rate of confirmed cases w
 `r table_nums("tab_CoxPH_confirmed")`
 
 ```{r CPH_confirmed,   results="asis"}
-# coxph(Surv(time = start, time2 = stop, event = event) ~ gender + ageg+home_type + region_UK+carer_to_bed_ratio+bed_tot_category, data = km_confirmed) %>% summary()
-explanatory = c("gender", "ageg", "home_type", "region_UK" , 
+# cph_conf <- coxph(Surv(time = start, time2 = stop, event = event) ~ gender + ageg+home_type+user_type2+region_UK+ staff_to_bed_ratio+bed_tot_category, data = km_confirmed)
+# summary(cph_conf)
+# cox.zph(cph_conf)
+# survfit(Surv(time = start, time2 = stop, event = event)~factor(home_type), data = km_confirmed) %>% ggsurvplot(ylim=c(.85,1), conf.int = T, legend = "right")
+explanatory = c("gender", "ageg", "home_type", "user_type2", "region_UK" ,  
                 "staff_to_bed_ratio", "bed_tot_category")
 dependent = "Surv(time = start, time2 = stop, event = event)"
 CPH_confirmed <-  finalfit(km_confirmed, dependent, 
                            explanatory, column = T,
                            add_dependent_label = F)  
-knitr::kable(CPH_confirmed, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
+knitr::kable(CPH_confirmed,
+             row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
 ```
 
 
+## All-cause mortality
+
+```{r km_death}
+km_death <- tline %>% 
+  filter(rday==1) %>% 
+  mutate(home_type = factor(home_type, c("Residential", "Nursing"))) %>% 
+  group_by(resident_id, home_code, dob, gender, 
+           status, home_type, user_type2,
+           susceptible_symptomatic, 
+           susceptible_confirmed) %>% 
+  summarise(entry_date = min(date),
+            exit_date = max(date+1)) %>% 
+  mutate(date1 = as.numeric( entry_date - date_min),
+         date2 = as.numeric(exit_date - date_min),
+         ageg = cut_age_denary(compute_age(dob, date_min), age.min = 75, age.max = 95)) %>% 
+  mutate(symptomatic = -susceptible_symptomatic+1,
+         confirmed = -susceptible_confirmed+1,
+         symptomatic_confirmed = (-susceptible_symptomatic+1)*(-susceptible_confirmed+1),
+         date2 = if_else(date1 == date2, date2 + 1, date2)) %>% 
+  mutate(covid_status = case_when(
+    symptomatic==0 & confirmed == 0 ~ "Negative",
+    symptomatic==1 & confirmed == 0 ~ "Symptomatic (not confirmed)",
+    symptomatic==0 & confirmed == 1 ~ "Asymptomatic confirmed",
+    symptomatic==1 & confirmed == 1 ~ "Symptomatic confirmed"
+  )) %>% 
+  mutate(covid_status = factor(covid_status, 
+                               levels = c("Negative", "Symptomatic (not confirmed)",
+                                          "Asymptomatic confirmed", "Symptomatic confirmed"))) %>% 
+  left_join(select(reference_homes, home_code, region_UK,
+                   staff_to_bed_ratio, carer_to_bed_ratio, bed_tot_category)) %>% 
+  group_by(resident_id) %>% 
+  mutate(death_status = if_else(
+    date1 == max(date1),
+    as.integer(status == "Deceased"),
+    0L
+  )) %>% 
+  ungroup()   
+# km_death <- bind_cols(km_death, data.frame(model.matrix(~-1+covid_status, data = km_death)))
+```
 
 
+The crude risk of all-cause death for the entire population of study was 19·4% (`r table_nums("tab_resident_descriptives", display = "cite")`). Time-varying covariate Cox proportional hazard models in `r table_nums("tab_CoxPH_death", display = "cite")` examine how mortality is affected by COVID-19 status and other factors. Mortality increased with age and men's rate of death was 47% greater than women's (adjusted HR = 1·5 [1·3; 1·6]) all other things equals.
 
+After controlling for other risk factors the hazard ratios of being asymptomatic confirmed and symptomatic confirmed cases respectively were 3.6 [2·2; 5·9] and 8·3 [6·9; 10·0], confirming that symptomatic cases were more severe. As for symptomatic residents without a confirmed diagnosis, the adjusted hazard ratio of all-cause mortality was intermediary at 5·2 [4·3; 6·3]. There was strong evidence that hazards were not proportional across these categories -- a Kaplan-Meier estimator of the unadjusted survival function illustrates this (`r fig_nums("fig_KM_mortality", display="cite")`). Mortality was significantly higher in nursing care homes (adjusted HR = 1·8 [1·6; 2·0]). The 28% increase in the hazard ratio after covariate adjustment reinforces the finding that this effect does not appear to be confounded by the greater proportion of symptomatic cases or common risk factors. This effect is likely attributable to a greater burden of comorbidities in nursing home residents. Beyond, there was no evidence of an association between care home size and all-cause mortality. After adjusting for other variables, the staff-to-bed ratio did not exhibit a statistically significant association with all-cause mortality (adjusted HR = 0·8 [0·6; 1.0]).
+
+
+`r table_nums("tab_CoxPH_death")`
+
+```{r risk_death, results="asis"}
+# cph_death <- coxph(Surv(date1, date2, death_status) ~
+#                       covid_status + gender+ ageg+ home_type +
+#                       staff_to_bed_ratio + bed_tot_category +(region_UK)+
+#                       cluster(resident_id), data = km_death)
+# summary(cph_death)
+# cox.zph(cph_death)
+# 
+explanatory = c("gender", "ageg", "home_type" , 
+                "staff_to_bed_ratio", "bed_tot_category", 
+                "covid_status", "region_UK", "cluster(resident_id)")
+dependent = "Surv(time = date1, time2 = date2, event = death_status)"
+CPH_death <-  finalfit(km_death, dependent, explanatory, 
+                       column = T, add_dependent_label = F)  
+knitr::kable(CPH_death, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
+
+```
+
+```{r fig_KM_mortality}
+survfit(Surv(time = date1, time2 = date2, event = death_status) ~ covid_status + cluster(resident_id), data = km_death) %>% 
+  ggsurvplot(., conf.int = TRUE, 
+           legend = "right",
+           ggtheme = theme_bw(),
+           break.x.by	= 7,
+           break.y.by = .1,
+           legend.labs = levels(km_death$covid_status),
+           xlab  = paste0("Days since ", format(date_min, "%d %B %Y")),
+           ylab = "Survival",
+           conf.int.alpha = .1) 
+```
+*Note*: The SARS-COV-2 classification is time-dependent and applies from the date of incident recorded on the relevatn Datix incident report.  
+
+`r fig_nums("fig_KM_mortality")`
 
 ## Staff symptomatic and confirmed cases
 
@@ -706,10 +817,9 @@ ggplot(aes(x = date, y = 1-S_t,
 # Interpretation
 
 
+Such data have limitations for care and prevention rather than epidemiological surveillance. Beyond uncertain on the exact number of cases, the viral antigen test campaign is a likely subject of underascertainment, on account of both the diagnostics' intrinsically low sensitivity, and of the timing of the systematic test campaign initiated on 11 May 2020. Residents may not have provided sample at their peak viral load, thereby reducing the rate of detection. According to a meta-analysis of 7 studies,[@Kucirka2020] the probability of a false-negative result in an infected person on the day of symptom onset (day 0) was 38% [18%; 65%], decreasing to 20% [12%; 30%] on day 3, subsequently rising to 66% [54%; 77%] on day 16. This factor appears to be one of the reasons why nursing homes have a higher rate of confirmed cases; a difference that is no longer significant once the staff-to-bed ratio is present in the model.
 
-Such data have limitations for care and prevention rather than epidemiological surveillance. Beyond uncertain on the exact number of cases, the viral antigen test campaign is a likely subject of underascertainment, on account of both the diagnostics' intrinsically low sensitivity, and of the timing of the systematic test campaign initiated on 11 May 2020. Residents may not have provided sample at their peak viral load, thereby reducing the rate of detection. According to a meta-analysis of 7 studies @Kucirka2020, the probability of a false-negative result in an infected person on the day of symptom onset (day 0) was 38% [18%; 65%], decreasing to 20% [12%; 30%] on day 3, subsequently rising to 66% [54%; 77%] on day 16. This factor appears to be one of the reasons why nursing homes have a higher rate of confirmed cases; a difference that is no longer significant once the staff staff_to_bed_ratio is present in the model.
-
-Consequently findings presented in the current study are likely to be underestimates, particularly estimates of the incidence staff_to_bed_ratio comparing care homes with the community in England.
+Consequently findings presented in the current study are likely to be underestimates, particularly estimates of the incidence ratio comparing care homes with the community in England.
  
 
 # Declarations
