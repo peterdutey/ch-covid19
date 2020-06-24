@@ -7,6 +7,7 @@
 \alias{extract_occupancy}
 \alias{extract_reference_homes}
 \alias{extract_tallies}
+\alias{extract_timelines}
 \title{Extract most recent flat files into R data objects}
 \usage{
 extract_incidents()
@@ -18,6 +19,8 @@ extract_occupancy()
 extract_reference_homes()
 
 extract_tallies()
+
+extract_timelines()
 
 extract_data(reference_data = FALSE)
 }

@@ -227,6 +227,14 @@ extract_incidents <- function() {
         infection_confirmed == "Yes - positive test result: confirmed case" ~ 1L,
         infection_confirmed == "No - negative test result" ~ 0L,
         TRUE ~ NA_integer_
+      ),
+      covid_test_date_corrected = dplyr::case_when(
+        covid_tested == 0 ~ as.Date(NA),
+        lubridate::year(infection_covid_19_test_date) != 2020 ~ as.Date(
+          paste0("2020",
+                 substr(infection_covid_19_test_date, 5, 10))),
+        is.na(infection_covid_19_test_date) ~ incident_date,
+        TRUE ~ infection_covid_19_test_date
       )
     ) %>%
     dplyr::mutate(
@@ -252,12 +260,17 @@ extract_incidents <- function() {
                 as.Date(NA))),
       covid_first_positive = min_non_missing(
         if_else(covid_test_result == 1,
-                incident_date,
+                # incident_date,
+                # 24/06 trying the actual test date
+                covid_test_date_corrected,
                 as.Date(NA))),
       covid_first_tested = min_non_missing(
         if_else(covid_tested == 1,
-                incident_date,
+                # incident_date,
+                # 24/06 trying the actual test date
+                covid_test_date_corrected,
                 as.Date(NA)))
+
     ) %>%
     dplyr::mutate(
       covid_ever_symptomatic = if_else(

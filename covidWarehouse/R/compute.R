@@ -225,12 +225,12 @@ resident_timelines <- function(residents_data = residents,
         dplyr::mutate(
           susceptible_symptomatic = dplyr::case_when(
             rday == 0 ~ 0L,
-            date > covid_first_symptomatic ~ 0L,
+            date >= covid_first_symptomatic ~ 0L,
             TRUE ~ 1L
           ),
           susceptible_confirmed = dplyr::case_when(
             rday == 0 ~ 0L,
-            date > covid_first_positive ~ 0L,
+            date >= covid_first_positive ~ 0L,
             TRUE ~ 1L
           ))
 
