@@ -26,6 +26,7 @@ funnel_poisson_control_limits <- function(y, denom) {
   )))
 }
 
+
 #' Classify observation as an outlier based on Poisson control limits
 #'
 #' @param o the numeric of the observed count
