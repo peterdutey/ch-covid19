@@ -240,6 +240,52 @@ resident_timelines <- function(residents_data = residents,
   output
 }
 
+resident_days_linear_approx <- function(min_date = as.Date("2020-01-01"),
+                                        max_date = as.Date("2020-07-01")) {
+  # This function estimates total daily occupancy (including contract beds) using linear
+  # interpolations between weekly censuses
+
+  load(file.path(getOption("fshc_files"), "occupancy.rda"),)
+  occupancy2 <- dplyr::select(occupancy, -resident_days)
+
+  output <- dplyr::tibble(
+    date = seq(min_date, max_date, by = 1),
+    week_ending = get_monday_date(seq(min_date, max_date, by = 1)) + 6
+    )
+  output$day_number <- as.integer( output$date - get_monday_date(output$date))
+
+  output <- tidyr::crossing(output, unique(occupancy2[,c("home_code")]))
+  output <- merge(output, occupancy2, by = c("week_ending", "home_code"),
+                  all.x = T, all.y = F)
+
+  output <- dplyr::rename(output, next_occupancy = occupancy) %>%
+    dplyr::arrange(home_code, date)
+
+  output <- output %>%
+    dplyr::mutate(
+      occupancy = last_occupancy + round(
+        (next_occupancy - last_occupancy) * day_number / 7
+      )
+    )  %>%
+    dplyr::arrange(home_code, date)
+
+  # carry forward last occupancy figure
+
+  output <- output %>%
+    dplyr::mutate(imputed = is.na(occupancy)) %>%
+    dplyr::group_by(home_code) %>%
+    dplyr::mutate(occupancy = dplyr::if_else(
+      imputed,
+      dplyr::last(na.omit(occupancy), order_by = date),
+      occupancy)) %>%
+    ungroup() %>%
+    dplyr::select(home_code, date, occupancy, imputed)
+
+  output
+}
+
+
+
 resident_days_approx <- function(timelines_data = timelines, time_span = get_time_span()) {
   # This function merges individual resident timelines and computes an approximation
   # of daily occupancy for each care home
