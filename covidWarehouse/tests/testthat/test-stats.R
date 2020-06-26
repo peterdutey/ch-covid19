@@ -29,8 +29,13 @@ km_indiv <- data.frame(km_indiv[1:8])
 km_indiv$pop <- km_indiv$n - cumsum(dplyr::lag(km_indiv$n.censor, 1, default = 0))
 km_indiv$n_t <- km_indiv$n
 
-expect_error(km_ct_estimator(km_indiv, time, n.event, pop, subtract_cases = TRUE, overwrite = FALSE))
-output <- expect_warning(km_ct_estimator(km_indiv, time, n.event, pop, overwrite = TRUE))
-expect_equal(output$surv, output$S_t)
-expect_equal(output$std.err, output$S_t_SE)
+output_sub <- expect_warning(km_ct_estimator(df = km_indiv, t = time, d = n.event,
+                              pop = pop, subtract_cases = TRUE, overwrite = TRUE))
+output_nosub<- expect_warning(km_ct_estimator(df = km_indiv, t = time, d = n.event,
+                               pop = n.risk, subtract_cases = FALSE, overwrite = TRUE))
+
+expect_equal(output_nosub$surv, output_nosub$S_t)
+expect_equal(output_nosub$std.err, output_nosub$S_t_SE)
+expect_equal(output_sub$surv, output_sub$S_t)
+expect_equal(output_sub$std.err, output_sub$S_t_SE)
 })
