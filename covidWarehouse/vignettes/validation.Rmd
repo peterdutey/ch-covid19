@@ -1,10 +1,14 @@
 ---
-title: "Data quality report"
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{validation}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+title: "Incidence of confirmed COVID-19 cases in care home staff and residents: Data quality and methodology report"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    code_folding: hide
+  word_document:
+    toc: yes
+    reference_docx: template.docx
+always_allow_html: yes
 ---
 
 ```{r, include = FALSE}
@@ -26,17 +30,75 @@ source("../.Rprofile")
 devtools::load_all("..")
 library(ggplot2)
 load_data()
+date_min <- as.Date("2020-03-02")
+date_max <- as.Date("2020-06-07") #as.Date("2020-06-15")
+date_max_tallies = as.Date("2020-06-07")
+
+
+tline <- dplyr::bind_rows(timelines$timeline)
+stopifnot(unique(tline$date_end)>=date_max)
+tline <- dplyr::filter(tline, between(date, date_min, date_max)) %>% 
+  dplyr::filter(resident_id %in% unique(residents$resident_id))
+
+home_inclusion <- unique(tline$home_code)
+
+reference_homes <- reference_homes %>% 
+  dplyr::filter(home_code %in% home_inclusion) %>% 
+  dplyr::left_join(select(reference_geography, postcode, country, region_UK), by = "postcode")
+
+incidents <- incidents %>% 
+  filter(dplyr::between(incident_date, date_min, date_max)) %>% 
+  filter(home_code %in% home_inclusion)
+beds <- beds %>% 
+  filter(home_code %in% home_inclusion)
+
+desc_before_exclusions <- list()
+desc_before_exclusions$nrow_incidents <- nrow(incidents)
+desc_before_exclusions$missing_id <- sum(grepl("^MISSING", incidents$resident_id))
+desc_before_exclusions$missing_id_pct <- mean(grepl("^MISSING", incidents$resident_id))*100
+desc_before_exclusions$link_fail <- sum(!incidents$resident_id[
+  which(!grepl("^MISSING", incidents$resident_id))] %in% unique(residents$resident_id))
+desc_before_exclusions$link_fail_pct <- tbrounding(
+  sum(!incidents$resident_id[
+    which(!grepl("^MISSING", incidents$resident_id))] %in% unique(residents$resident_id)) / 
+    nrow(incidents)*100) 
+
+
+# removing erroneous incident reports (no identifier or not linking to residents file) 
+incidents <- filter(incidents, !grepl("^MISSING", resident_id)) %>% 
+  filter(resident_id %in% unique(residents$resident_id))
+
+
+new_cases <- filter(new_cases, between(date, date_min, date_max_tallies)) %>% 
+    filter(home_code %in% home_inclusion)
+
 ```
 
+## Overview
 
-This report is based on `r formatbm(nrow(incidents))` Datix reports of incidents dated up to `r format(max(incidents$incident_date), "%A %e %b %Y")`. Incidents relate to `r formatbm(dplyr::n_distinct(incidents$resident_id))` unique residents. 
+This report provides additional information on the validation of: 
 
-Incidents report were obtained from `r formatbm(dplyr::n_distinct(incidents$home_code))` care homes totalling `r formatbm(sum(beds[beds$year=="2020" & beds$home_code %in% unique(incidents$home_code), "beds"]))` beds. In 2020, Four Seasons Health Care comprises `r formatbm(dplyr::n_distinct(beds[beds$year=="2020", "home_code"]))` care homes with a total of `r formatbm(sum(beds[beds$year=="2020", "beds"]))` beds.
+- procedures for classifying the SARS-CoV-2 status (symptomatic, tested, confirmed)
+- procedures for computing the at-risk resident-days 
+- overall numbers of symptomatic and confirmed cases
 
 
-## Classification of cases
+## Classification of SARS-CoV-2 cases from incident reports
 
-The incident classification is not wholly consistent, as illustrated in the tabulation below. Due to this, a reclassification algorithm is used.
+The SARS-CoV-2 status is determined by a combination of fields from the Datix incidents management system: 
+
+- `infection_covid_19_type` is a mandatory field one of two possible values:
+  - "Confirmed formal clinical diagnosis of COVID-19"   
+  - "Symptoms, but no definite clinical diagnosis of COVID-19"
+- `infection_confirmed` contains one of 4 possible values (if not missing):
+  - "Yes - positive test result: confirmed case"
+  - "Test result not yet received"
+  - "No - negative test result"
+  - "Not tested"   
+- `infection_result` is a free-text field containing, for the most part, the words 'positive' or 'negative'
+
+
+Incident reports are dynamic: they are designed to be updated as more information becomes available. If all fields are not accurately kept updated, some values may become inconsistent. Inconsistencies are observed in incident reports  as illustrated in the tabulations below. Due to this, a reclassification algorithm is used which prioritises any information on a positive test result.
 
 ```{r }
 print(ctable(incidents$infection_confirmed, incidents$infection_covid_19_type, useNA = "always"), method = 'render')
@@ -44,7 +106,7 @@ print(ctable(incidents$infection_confirmed, incidents$infection_covid_19_type, u
 
 ### Algorithm
 
-The following algorithm is used to classify symptomatic, suspected, and test-confirmed cases from the Datix reports of COVID-19 infections.
+The following algorithm is used to classify symptomatic, tested, and test-confirmed cases from the Datix reports of COVID-19 infections.
 
 
 ```{r echo=FALSE}
@@ -81,39 +143,35 @@ print(ctable(incidents$infection_confirmed, incidents$covid_test_result, useNA =
 
 ## Data quality
 
-### Demographic information
+### Exclusions
 
-Resident pseudoidentifiers were absent in `r sum(grepl("^MISSING", incidents$resident_id))` (`r tbrounding(mean(grepl("^MISSING", incidents$resident_id))*100)`%) of Datix incident reports. The pseudoidentifiers of a further `r sum(!incidents$resident_id[which(!grepl("^MISSING", incidents$resident_id))] %in% unique(residents$resident_id))` reports (`r tbrounding(sum(!incidents$resident_id[which(!grepl("^MISSING", incidents$resident_id))] %in% unique(residents$resident_id))/nrow(incidents)*100)`%) were could not be successfully linked to the residents database. In total, `r sum(is.na(incidents$age) & is.na(incidents$date_of_birth))` reports (`r tbrounding(mean(is.na(incidents$age) & is.na(incidents$date_of_birth))*100)`%) did not have any date of birth or age, and `r sum(is.na(incidents$gender))` reports (`r tbrounding(mean(is.na(incidents$gender))*100)`%) did not have sex recorded. 
+A total of `r desc_before_exclusions$nrow_incidents` were obtained. Resident pseudoidentifiers were absent in `r formatbm(desc_before_exclusions$missing_id)` (`r tbrounding(desc_before_exclusions$missing_id_pct)`%) of Datix incident reports. The pseudoidentifiers of a further `r desc_before_exclusions$link_fail ` reports (`r tbrounding(desc_before_exclusions$link_fail /desc_before_exclusions$nrow_incidents*100)`%) were could not be successfully linked to the residents database. All were excluded, leaving a total of `r nrow(incidents)` reports dated between `r format(date_min, "%A %e %b %Y")` and  `r format(date_max, "%A %e %b %Y")` relating to `r formatbm(dplyr::n_distinct(incidents$resident_id))` unique residents.
+These reports belongued to `r formatbm(dplyr::n_distinct(incidents$home_code))` care homes totalling `r formatbm(sum(beds[beds$year=="2020" & beds$home_code %in% unique(incidents$home_code), "beds"]))` beds. For the period of study, the Four Seasons Health Care Group (FSHCG) comprises `r formatbm(dplyr::n_distinct(beds[beds$year=="2020", "home_code"]))` care homes with a total of `r formatbm(sum(beds[beds$year=="2020", "beds"]))` beds.
 
 ### Occupancy
 
-Care home resident days are available from two sources:
-
-- weekly home occupancy reports provided by FSHC
-- individual-level resident records of last admission and discharge processing
-
-The plots below compare both measures at the care-home level and FSHC overall.
-
-```{r,  fig.cap = "Weekly total resident-days per care home"}
-approx_occupancy <- resident_days_approx(timelines = timelines,
-                                         time_span = get_time_span()
-                                        ) %>% 
-  dplyr::mutate(
-    week_ending = get_monday_date(date) %m+% days(6)
-  ) %>% 
-  dplyr::group_by(home_code, week_ending) %>% 
-  dplyr::summarise(
-    approx_resident_days = sum(approx_resident_days)
-  )
+```{r occupancy_appx}
+approx_occupancy <- tline %>% 
+  filter(date %in% unique(occupancy$week_ending)) %>% 
+  mutate(week_ending = date) %>% 
+  group_by(home_code, week_ending) %>% 
+  summarise(approx_occupancy = sum(rday))
 
 occ_home <- merge(
   approx_occupancy,
-  occupancy,
+  #remove Warmley House Nursing which has no occupancy report
+  na.omit(select(filter(occupancy, home_code != "360"), 
+                 home_code, week_ending, occupancy)),
   all = FALSE
 ) 
 
 bed2020 <- dplyr::filter(beds, year == "2020") %>% 
-  dplyr::select(-year)
+  dplyr::select(-year) %>% 
+  mutate(pct_contract = contract_beds/beds,
+         contract_10pc = dplyr::case_when(
+    contract_beds/beds >= .1 ~ ">=10% contract beds",
+    TRUE ~ "<10% contract beds"
+  ))
 
 occ_home <- merge(
   occ_home,
@@ -123,49 +181,84 @@ occ_home <- merge(
   dplyr::mutate(contract_10pc = dplyr::case_when(
     contract_beds/beds >= .1 ~ ">=10% contract beds",
     TRUE ~ "<10% contract beds"
-  ))
+  )) %>% 
+  dplyr::left_join(select(reference_homes, home_code, country))
+
+
+ratio_occupant_estimates <- (sum(occ_home$occupancy)/sum(occ_home$approx_occupancy))
+ratio_occupant_estimates_england <- dplyr::filter(occ_home, country == "England") %>% 
+  dplyr::summarise(ratio = sum(occupancy)/sum(approx_occupancy)) %>% 
+  .$ratio
+
+outbreak_homes <- dplyr::mutate(new_cases, new_confirmed = tidyr::replace_na(new_confirmed_home, 0) + tidyr::replace_na(new_confirmed_hospital, 0)) %>% 
+  dplyr::group_by(home_code) %>% 
+  dplyr::summarise(new_confirmed = sum(new_confirmed)) %>% 
+  dplyr::filter(new_confirmed != 0) %>% 
+  dplyr::distinct(home_code) %>% .$home_code
+
+ratio_occupant_estimates_outbreak_only <- occ_home %>% 
+  dplyr::filter(home_code %in% outbreak_homes) %>% 
+  dplyr::summarise(ratio = sum(occupancy)/sum(approx_occupancy)) %>% 
+  .$ratio
 
 occ_global <- occ_home %>% 
-  dplyr::group_by(home_code, contract_10pc) %>% 
+  dplyr::group_by(home_code, contract_10pc, pct_contract) %>% 
   dplyr::summarise(
-    approx_resident_days = sum(approx_resident_days, na.rm = T),
-    resident_days = sum(resident_days, na.rm = T)
+    approx_occupancy = sum(approx_occupancy),
+    occupancy = sum(occupancy)
   ) %>% 
   dplyr::mutate(
     outliers = dplyr::if_else(
-      abs(1-approx_resident_days/resident_days) > .10 &
+      abs(1-approx_occupancy/occupancy) > .10 &
         contract_10pc != ">=10% contract beds",
       home_code,
       "")
   )
+```
 
-ggplot(occ_home, aes(x = resident_days, y = approx_resident_days)) +
+Care home resident-days are available from two sources:
+
+- reports to FSHCG by every home on their occupancy every Sunday, which include residents occupying contract beds 
+- individual-level resident records of first and last admission and discharge dates, to he exclusion of occupants of contract beds. These records are used to compute occupancy on a daily basis.
+
+
+In total, `r sum(filter(bed2020, home_code %in% home_inclusion)$contract_beds)` out of `r sum(filter(bed2020, home_code %in% home_inclusion)$beds)` beds were contracted by the local authority, with `r nrow(filter(bed2020, pct_contract>.5 & home_code %in% home_inclusion))` homes having more than half of their beds contracted.
+
+Plots below compare both measures for every Sunday (Figure 1) and in total across the period (Figure 2) at the level of care homes, drawing attention to care homes with a large proportion of contract beds. The Pearson's correlation between the weekly measures was $r=$ `r tbrounding(cor(occ_home$occupancy, occ_home$approx_occupancy), 2)` overall, rising to $r=$ `r with(filter(occ_home, contract_beds/beds <.1), tbrounding(cor(occupancy, approx_occupancy), 2))` once excluding care homes with $\geq$ 10% contract beds. These findings confirm that occupancy could be approximated reliably using just residents' records of first and last admission and discharge dates.
+
+This enabled us to estimate exposure (resident-days) excluding local authority contract beds, since no Datix incident reports were returned for occupants of such beds. 
+
+In addition, this validation enabled us to approximate the total number of unique residents (including contract beds) during the period of observation. The ratio of occupants recorded by FSHCG to the number approximated by us was `r tbrounding(ratio_occupant_estimates, 3) `. The number of unique residents in non-contract beds was `r formatbm(length(unique(tline$resident_id[tline$rday ==1])))` during the study period. By assuming that the resident turnover in local authority beds was the same as the rate in other beds, we infer the number of unique residents inclusive of contract beds to be `r formatbm(round(length(unique((tline$resident_id[tline$rday ==1])))*ratio_occupant_estimates+.5))`.
+
+In England, this ratio was `r ratio_occupant_estimates_england`, and for outbreak homes across the UK, `r ratio_occupant_estimates_outbreak_only`
+
+```{r,  fig.cap = "Weekly total resident-days per care home", message = F}
+ggplot(occ_home, aes(x = occupancy, y = approx_occupancy)) +
   geom_point(aes(shape = contract_10pc)) +
   geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
   geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
-  xlab("Resident-days provided by FSHC") +
-  ylab("Resident-days approximated\nfrom resident records") +
-  ggtitle(paste0("Weekly total resident-days by care home (L=", dplyr::n_distinct(occ_home$home_code), ")")) +
+  xlab("Occupancy provided by FSHC") +
+  ylab("Occupancy approximated\nfrom resident records") +
+  ggtitle(paste0("Figure 1: Weekly total resident-days by care home (L=", dplyr::n_distinct(occ_home$home_code), ")")) +
   scale_colour_manual(name="Line of fit",
     values = c("Identity" = "black", "OLS" = "blue", "Spline" = "red")) +
   scale_linetype_manual(name="Line of fit",
     values = c("Identity" = "solid", "OLS" = "longdash", "Spline" = "dotted")) +
   scale_shape_manual(name="Bed composition",
     values = c(1, 3)) 
- 
 ```
 
-```{r, fig.cap = "Weekly total resident-days"}
+```{r, fig.cap = "Weekly total resident-days", message = F}
 
-ggplot(occ_global, aes(x = resident_days, y = approx_resident_days)) +
+ggplot(occ_global, aes(x = occupancy, y = approx_occupancy)) +
   geom_point(aes(shape = contract_10pc)) +
   geom_text(aes(label = outliers), 
             nudge_x = .1,  nudge_y = .15, vjust = "outward", hjust = "outward") +
    geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
   geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
-  xlab("Resident-days provided by FSHC") +
-  ylab("Resident-days approximated from resident records") +
-  ggtitle("Total resident-days across FSHC since 9 March 2020") +
+  xlab("Occupancy provided by FSHC") +
+  ylab("Occupancy approximated from resident records") +
+  ggtitle(paste0("Figure 2: Total resident-days across FSHC during study period \n(", format(date_min, "%d %b %Y"), " - ", format(date_max, "%d %b %Y"),")")) +
   scale_colour_manual(name="Line of fit",
     values = c("Identity" = "black", "OLS" = "blue", "Spline" = "red")) +
   scale_linetype_manual(name="Line of fit",
@@ -174,69 +267,98 @@ ggplot(occ_global, aes(x = resident_days, y = approx_resident_days)) +
     values = c(1, 3)) 
 ```
 
+We nevertheless identified 11 care homes in which the total resident-days approximated differed by more than 10 percent despite not belonging (marked on Figure 2, see list below).
 
-```{r}
+```{r, message=F}
 merge(dplyr::select(reference_homes, home_code, home_name_datix),
       dplyr::filter(occ_global, outliers != "")) %>%
-  dplyr::select(-outliers, -contract_10pc)
+  dplyr::transmute(home_code, home_name_datix, approx_occupancy, occupancy,
+                   `% contract beds` = round(pct_contract*100, 1))
 ```
 
 ### Comparison of manager-reported tally counts with Datix-derived counts
 
-FSHC regional managers 
+```{r case_validation, message=F}
+residents_overview <- tline %>% 
+  dplyr::filter(rday==1) %>%
+  dplyr::group_by(resident_id, home_code) %>% 
+  dplyr::summarise(resident_days = sum(rday),
+            susceptible_symptomatic_days = sum(susceptible_symptomatic),
+            susceptible_confirmed_days = sum(susceptible_confirmed),
+            symptomatic = max(-susceptible_symptomatic+1, na.rm = T),
+            confirmed = max(-susceptible_confirmed+1, na.rm = T),
+            start_date = min(date, na.rm = T),
+            stop_date = max(date, na.rm = T),
+            start_int = as.numeric(min(date, na.rm = T) - date_min),
+            stop_int = as.numeric(max(date, na.rm = T)- date_min)
+    ) %>% 
+  dplyr::left_join(dplyr::select(reference_homes, home_code, home_name_datix)) %>% 
+  dplyr::left_join(dplyr::distinct(dplyr::select(incidents, resident_id, dplyr::starts_with("covid_first"))) )
 
-
-```{r}
-
-bed2020 <- dplyr::mutate(bed2020, contract_10pc = dplyr::case_when(
-    contract_beds/beds >= .1 ~ ">=10% contract beds",
-    TRUE ~ "<10% contract beds"
-  ))
-ch_data <- table_weekly_cases_home()
-ch_data_all <- ch_data %>% 
-  dplyr::group_by(home_code, home_name_datix, home_name_clickview) %>% 
+  
+datix_counts <- residents_overview %>% 
+  dplyr::group_by(home_code, home_name_datix) %>% 
   dplyr::summarise(
-    resident_days = sum(resident_days_imputed, na.rm = T),
-    first_symptomatic = sum(first_symptomatic, na.rm = T),
-    tally_first_symptomatic = sum(tally_first_symptomatic, na.rm = T),
-    first_confirmed = sum(first_confirmed, na.rm = T),
-    tally_confirmed = sum(tally_confirmed, na.rm = T)
-  ) %>% 
+    datix_symptomatic = sum(symptomatic, na.rm = T),
+    datix_confirmed = sum(confirmed, na.rm = T) ) %>% 
+  dplyr::left_join(bed2020) 
+
+tally_counts <- new_cases %>% 
+  filter(home_code %in% home_inclusion) %>% 
+  filter(between(date, date_min, date_max)) %>% 
+  dplyr::group_by(home_code) %>% 
+  dplyr::summarise(
+    tally_symptomatic = sum(new_symptomatic_home, na.rm = T) + 
+      sum(new_symptomatic_hospital, na.rm = T),
+    tally_confirmed = sum(new_confirmed_home, na.rm = T) + 
+      sum(new_confirmed_hospital, na.rm = T)
+  )
+
+ch_data_all <- merge(datix_counts, tally_counts, all = T) %>% 
   dplyr::mutate(
-    home_code_lbl = if_else(tally_first_symptomatic>20, home_code, ""),
-    home_code_lbl2 = if_else(tally_confirmed>15 | first_confirmed>15, home_code, "")) %>% 
-  dplyr::left_join(bed2020, by = "home_code")
+    home_code_lbl = if_else(tally_symptomatic>20, home_code, ""),
+    home_code_lbl2 = if_else(tally_confirmed>15 | datix_confirmed>15, home_code, ""))
+```
 
 
+ 
+During the study period, manager counted `r sum(ch_data_all$tally_confirmed)` confirmed infection while Datix recorded `r sum(ch_data_all$datix_confirmed)` such infections. The `r round(sum(ch_data_all$tally_confirmed)/sum(ch_data_all$datix_confirmed)*100-100 )`% excess could be due to a range of explanations:
+
+1. contract beds occupants, who may represent at least `r tbrounding((1-1/ratio_occupant_estimates)*100)`% of residents (assuming that their turnover is identical to that of occupants of other beds, in reality turnover is likely to be higher, and so is this proportion), may have a higher infection rate than other residents 
+2. underreporting on Datix
+3. linkage error
+4. double-counting of cases in manager counts
+
+It is not possible to rely on explanation (1) exclusively: the number of confirmed infections on Datix was greater than manager counts in `r sum(ch_data_all$datix_confirmed > ch_data_all$tally_confirmed)` care homes. This suggest double counting (4) is a real possibility.
 
 
+```{r comparison_symptomatic, message = F}
 ggplot(data = ch_data_all, 
-       aes(x = tally_first_symptomatic, y = first_symptomatic)) + 
+       aes(x = tally_symptomatic, y = datix_symptomatic)) + 
   geom_point(aes(shape = contract_10pc)) +
   geom_text(aes(label = home_code_lbl),
             nudge_x = 2,  nudge_y = 1) + 
   geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
   geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
-  xlab("Manager counts") + ylab("Datix-derived counts") + labs(title="Comparison of Datix and manager counts of symptomatic cases") +
+  xlab("Manager counts") + ylab("Datix-derived counts") + labs(title="Figure 3: Comparison of Datix and manager counts of symptomatic cases") +
   scale_colour_manual(name="Line of fit",
     values = c("Identity" = "black", "OLS" = "blue", "Spline" = "red")) +
   scale_linetype_manual(name="Line of fit",
     values = c("Identity" = "solid", "OLS" = "longdash", "Spline" = "dotted")) +
   scale_shape_manual(name="Bed composition",
     values = c(1, 3)) 
-
 ```
 
 
-```{r warning=TRUE}
+```{r comparison_confirmed, message=F}
 
-ggplot(data = ch_data_all, aes(x = tally_confirmed, y = first_confirmed)) + 
+ggplot(data = ch_data_all, aes(x = tally_confirmed, y = datix_confirmed)) + 
   geom_point(aes(shape = contract_10pc)) +
   geom_text(aes(label = home_code_lbl2), 
             nudge_x = 1,  nudge_y = 1.2) + 
   geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
   geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
-  xlab("Manager counts") + ylab("Datix-derived counts") + labs(title="Comparison of Datix and manager counts of confirmed cases") +
+  xlab("Manager counts") + ylab("Datix-derived counts") + labs(title="Figure 4: Comparison of Datix and manager counts of confirmed cases") +
   scale_colour_manual(name="Line of fit",
     values = c("Identity" = "black", "OLS" = "blue", "Spline" = "red")) +
   scale_linetype_manual(name="Line of fit",

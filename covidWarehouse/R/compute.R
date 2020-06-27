@@ -422,7 +422,39 @@ table_weekly_rate_tests <- function() {
   output
 }
 
+#' Compute the total number of cases in the home
+#'
+#' @param occupancy a numeric vector of total number of residents present
+#' in the home for every date
+#' @param new_cases a numeric vector of new cases recorded in the home at
+#' every date
+#' @param order_by a vector of dates or day numbers
+#'
+#' @return a numeric vector of total new and previous cases currently in
+#' the home
+#' @export
+total_cases_in_home <- function(occupancy, new_cases, order_by) {
 
+  if(any(is.na(order_by) | duplicated(order_by))) {
+    stop("order_by must be unique and non missing")
+  }
+
+  sort_vector <- order(order_by)
+  reverse_sort_vector <- order(sort_vector)
+
+  occupancy <- occupancy[sort_vector]
+  new_cases <- new_cases[sort_vector]
+
+  occupancy_change_rate <- pmin(1, tidyr::replace_na(occupancy/lag(occupancy), 1))
+
+  stopifnot(all(occupancy_change_rate <= 1 & occupancy_change_rate >= 0))
+  I_t <- 0
+  for(i in 2:length(occupancy)){
+    I_t[i] <- (I_t[i-1] + new_cases[i-1]) * occupancy_change_rate[i]
+  }
+
+  I_t[reverse_sort_vector]
+}
 
 #' Deduplicated cases and events
 #'

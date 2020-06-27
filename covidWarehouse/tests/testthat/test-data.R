@@ -47,3 +47,20 @@ test_that("resident bed day approximation", {
                c(0, 1, 1, 0, 1, 0, 1, 0))
 })
 
+test_that("total_cases_in_home", {
+  data <- dplyr::tibble(
+    date = 1:5,
+    occupancy = c(3000,2990,2980,2975,2971),
+    new_cases = c(10,8,9,12,8)
+    )
+  truncated_result <- c(0, 9, 17, 26, 38)
+
+  expect_equal(trunc(total_cases_in_home(data$occupancy, data$new_cases, data$date)),
+               truncated_result)
+
+  data <- rev(data)
+  truncated_result <- rev(truncated_result)
+  expect_equal(trunc(total_cases_in_home(data$occupancy, data$new_cases, data$date)),
+               truncated_result)
+
+})
