@@ -45,9 +45,9 @@ if(knit_output_pdf){
 }
 
 date_min <- as.Date("2020-03-02")
-date_max <- as.Date("2020-06-07") #as.Date("2020-06-15")
+date_max <- as.Date("2020-06-14")
 date_min_tallies = as.Date("2020-03-24")
-date_max_tallies = as.Date("2020-06-07")
+date_max_tallies = as.Date("2020-06-14")
 
 ```
 
@@ -69,9 +69,6 @@ tline <- filter(tline, between(date, date_min, date_max)) %>%
     ))
 
 home_inclusion <- unique(tline$home_code)
-
-
-
 
 reference_homes <- reference_homes %>% 
   filter(home_code %in% home_inclusion) %>% 
@@ -127,14 +124,14 @@ approx_occupancy <- merge(
   left_join(approx_occupancy)
 
 
-occupancy_interpolated <- resident_days_linear_approx() %>% 
-  # TODO: currently putting the individual-level occup for 360 because no occ tally is known!
-  # it's got 57 bed including 5 contract beds, so 
-  left_join(transmute(filter(approx_occupancy, home_code == "360"), 
-                      date, home_code  , occup360 = trunc(occupancy * 57/52)),
-            by = c("home_code", "date")) %>%
-  mutate(occupancy = if_else(home_code == "360", occup360, occupancy)) %>% 
-  select(-occup360)
+occupancy_interpolated <- resident_days_linear_approx() #%>% 
+  # # TODO: currently putting the individual-level occup for 360 because no occ tally is known!
+  # # it's got 57 bed including 5 contract beds, so 
+  # left_join(transmute(filter(approx_occupancy, home_code == "360"), 
+  #                     date, home_code  , occup360 = trunc(occupancy * 57/52)),
+  #           by = c("home_code", "date")) %>%
+  # mutate(occupancy = if_else(home_code == "360", occup360, occupancy)) %>% 
+  # select(-occup360)
 
 home_mean_occupancy <- occupancy_interpolated  %>% 
   filter(between(date, date_min_tallies, date_max_tallies)) %>% 
@@ -143,7 +140,8 @@ home_mean_occupancy <- occupancy_interpolated  %>%
 
 reference_homes <- reference_homes %>% 
   left_join(home_mean_occupancy) %>% 
-  mutate(pct_occupancy = mean_occupancy/beds)
+  mutate(pct_occupancy = mean_occupancy/beds,
+         occ_bedroom_ratio = mean_occupancy/no_bedrooms)
 
 
 residents_episodes <- tline %>% 
@@ -175,7 +173,8 @@ residents_episodes <- tline %>%
                                           "Asymptomatic confirmed", "Symptomatic confirmed")),
          ageg = cut_age_denary(compute_age(dob, date_min), age.min = 75, age.max = 95))   %>% 
   left_join(select(reference_homes, home_code, country, region_UK,
-                   staff_to_bed_ratio, carer_to_bed_ratio, bed_tot_category, beds, pct_occupancy)) %>% 
+                   staff_to_bed_ratio, carer_to_bed_ratio, bed_tot_category, 
+                   beds, pct_occupancy, occ_bedroom_ratio, no_bedrooms)) %>% 
   group_by(resident_id) %>% 
   mutate(death_status = if_else(
     date1 == max(date1),
@@ -210,7 +209,8 @@ residents_overview <- tline %>%
                                levels = c("Negative", "Symptomatic (not confirmed)",
                                           "Asymptomatic confirmed", "Symptomatic confirmed"))) %>% 
   left_join(select(reference_homes, home_code, country, region_UK,
-                   staff_to_bed_ratio, carer_to_bed_ratio, bed_tot_category, beds, beds, pct_occupancy)) %>% 
+                   staff_to_bed_ratio, carer_to_bed_ratio, bed_tot_category,
+                   beds,  pct_occupancy, occ_bedroom_ratio, no_bedrooms)) %>% 
   left_join(distinct(select(incidents, resident_id, starts_with("covid_first"))))
  
 
@@ -248,13 +248,16 @@ desc_national <- tibble(
   `Total residents` = c(NA, 35989, NA)
 )
 
-home_total_confirmed <- distinct(reference_homes, home_code, home_name_clickview, postcode) %>% 
-  left_join(select(reference_geography, postcode, country, region_UK), by = "postcode") %>% 
+home_total_confirmed <- distinct(reference_homes, home_code, home_name_clickview, 
+                                 country, region_UK, staff_to_bed_ratio, carer_to_bed_ratio, 
+                                 bed_tot_category, beds, pct_occupancy, no_bedrooms, occ_bedroom_ratio,
+                                 younger_person, residential_general, residential_dementia,
+                                 nursing_general,nursing_dementia) %>% 
   left_join(res_counts, by = "home_code") %>% 
   left_join(home_total_confirmed_CT) %>% 
   left_join(home_total_confirmed_DAT) %>% 
   mutate(CT_confirmed = tidyr::replace_na(CT_confirmed, 0),
-        DAT_confirmed = tidyr::replace_na(DAT_confirmed, 0))
+         DAT_confirmed = tidyr::replace_na(DAT_confirmed, 0))
 
 home_zero_confirmed <- home_total_confirmed %>% 
   group_by(region_UK) %>% 
@@ -268,16 +271,22 @@ home_zero_confirmed <- home_total_confirmed %>%
 
 desc_homes <- bind_rows(desc_homes, desc_national) 
 
+
+
+
 ```
 
 ```{r km_objects}
 
 residents_ct <- tibble(date = seq(date_min, date_max_tallies, 1)) %>% 
-  left_join(distinct(new_cases, date, home_code, 
+  left_join(select(new_cases, date, home_code, 
                      new_confirmed_home, new_confirmed_hospital,
-                     new_symptomatic_home, new_symptomatic_hospital)) %>% 
+                     new_symptomatic_home, new_symptomatic_hospital,
+                     new_deaths_home, new_deaths_hospital)) %>% 
   filter(!is.na(home_code)) %>% 
-  left_join(distinct(reference_homes, home_code, home_name_datix, postcode, staff_total, nursing_dementia, nursing_general, residential_dementia, residential_general, younger_person)) %>% 
+  left_join(distinct(reference_homes, home_code, home_name_datix, postcode, 
+                     staff_total, nursing_dementia, nursing_general, 
+                     residential_dementia, residential_general, younger_person)) %>% 
   left_join(select(reference_geography, postcode, region_UK)) %>% 
   left_join(occupancy_interpolated) %>% 
   arrange(home_code, date) %>% 
@@ -285,50 +294,58 @@ residents_ct <- tibble(date = seq(date_min, date_max_tallies, 1)) %>%
   mutate(new_symptomatic = tidyr::replace_na(new_symptomatic_home, 0) +
                                     tidyr::replace_na(new_symptomatic_hospital, 0),
          new_confirmed = tidyr::replace_na(new_confirmed_home, 0) +
-                                    tidyr::replace_na(new_confirmed_hospital, 0)) %>% 
+                                    tidyr::replace_na(new_confirmed_hospital, 0),
+         new_deaths = tidyr::replace_na(new_deaths_home, 0) +
+                                    tidyr::replace_na(new_deaths_hospital, 0)) %>% 
   mutate(I_symptomatic = total_cases_in_home(occupancy, new_symptomatic, date),
          I_confirmed = total_cases_in_home(occupancy, new_confirmed, date)) %>% 
   ungroup()
 
+km_ct_residents_deaths <- residents_ct %>% 
+  group_by(date) %>% 
+  summarise(
+    deaths = sum(new_deaths),
+    occupancy = sum(occupancy)
+  ) %>% 
+  km_ct_estimator(df = ., t = date, d = deaths, 
+                  pop = occupancy, subtract_cases = FALSE, overwrite = TRUE) %>% 
+  ungroup() %>% 
+  mutate(
+    St_max = S_t^exp(1.96*S_t_SElog),
+    St_min = S_t^exp(-1.96*S_t_SElog),
+    event = "Death"
+  )
+
 km_ct_residents_confirmed <- residents_ct %>% 
-  group_by(date, region_UK) %>% 
+  group_by(date) %>% 
   summarise(
     confirmed = sum(new_confirmed),
     I_confirmed = round(sum(I_confirmed)),
     occupancy = sum(occupancy)
   ) %>% 
-  group_by(region_UK) %>% 
   km_ct_estimator(df = ., t = date, d = confirmed, 
                   pop = (occupancy - I_confirmed), subtract_cases = FALSE, overwrite = TRUE) %>% 
   ungroup() %>% 
   mutate(
     St_max = S_t^exp(1.96*S_t_SElog),
-    St_min = S_t^exp(-1.96*S_t_SElog)
+    St_min = S_t^exp(-1.96*S_t_SElog),
+    event = "Confirmed infection"
   )
 
-# residents_ct_symp <- tibble(date = seq(date_min, date_max_tallies, 1)) %>% 
-#   left_join(distinct(new_cases, date, home_code, 
-#                      new_symptomatic_home, new_symptomatic_hospital)) %>% 
-#   filter(!is.na(home_code)) %>% 
-#   left_join(distinct(reference_homes, home_code, home_name_datix, postcode)) %>% 
-#   left_join(select(reference_geography, postcode, region_UK)) %>% 
-#   left_join(occupancy_interpolated) %>% 
-#   arrange(date) 
-
 km_ct_residents_symp <- residents_ct %>% 
-  group_by(date, region_UK) %>% 
+  group_by(date) %>% 
   summarise(
     symptomatic = sum(new_symptomatic),
     I_symptomatic = round(sum(I_symptomatic)),
     occupancy = sum(occupancy)
   ) %>% 
-  group_by(region_UK) %>% 
   km_ct_estimator(df = ., t = date, d = symptomatic, 
                   pop = (occupancy - I_symptomatic), subtract_cases = FALSE, overwrite = TRUE) %>% 
   ungroup() %>% 
   mutate(
     St_max = S_t^exp(1.96*S_t_SElog),
-    St_min = S_t^exp(-1.96*S_t_SElog)
+    St_min = S_t^exp(-1.96*S_t_SElog),
+    event = "Symptomatic case"
   )
 
 staff_ct <- tibble(date = seq(date_min, date_max_tallies, 1)) %>% 
@@ -348,35 +365,35 @@ staff_ct <- tibble(date = seq(date_min, date_max_tallies, 1)) %>%
   ungroup()
 
 km_staff_symptomatic <- staff_ct %>% 
-  group_by(date, region_UK) %>% 
+  group_by(date) %>% 
   summarise(
     symptomatic = sum(new_colleague_symptomatic),
     I_symptomatic = round(sum(I_symptomatic)),
     staff_total = sum(staff_total)
   ) %>% 
-  group_by(region_UK) %>% 
   km_ct_estimator(., t=date, d=symptomatic, pop=(staff_total-I_symptomatic),
                   subtract_cases = FALSE, overwrite = TRUE) %>% 
   ungroup() %>% 
   mutate(
     St_max = S_t^exp(1.96*S_t_SElog),
-    St_min = S_t^exp(-1.96*S_t_SElog)
+    St_min = S_t^exp(-1.96*S_t_SElog),
+    event = "Symptomatic case"
   )
 
 km_staff_confirmed <- staff_ct %>% 
-  group_by(date, region_UK) %>% 
+  group_by(date) %>% 
   summarise(
     confirmed = sum(new_colleague_confirmed),
     I_confirmed = round(sum(I_confirmed)),
     staff_total = sum(staff_total)
   ) %>% 
-  group_by(region_UK) %>% 
   km_ct_estimator(., t=date, d=confirmed, pop=(staff_total-I_confirmed),
                   subtract_cases = FALSE, overwrite = TRUE) %>% 
   ungroup() %>% 
   mutate(
     St_max = S_t^exp(1.96*S_t_SElog),
-    St_min = S_t^exp(-1.96*S_t_SElog)
+    St_min = S_t^exp(-1.96*S_t_SElog),
+    event = "Confirmed infection"
   )
 
 desc_staff <- list()
@@ -416,12 +433,17 @@ desc_staff[paste0(
 ```{r descriptives}
 desc_residents <- list()
 desc_residents$DAT_total_residents <- dplyr::n_distinct(residents_overview$resident_id)
-desc_residents$DAT_total_residents_england <- dplyr::filter(residents_overview, country == "England") %>% summarise(n = dplyr::n_distinct(resident_id)) %>% .$n
-  
+
 #COUNTS
 # This is estimated in validation.Rmd
-desc_residents$CT_total_residents <- round(desc_residents$DAT_total_residents * 1.117309 + .49)
-desc_residents$CT_total_residents_england <- round(desc_residents$DAT_total_residents_england * 1.0793268 + .49)
+desc_residents$CT_total_residents <- tline %>% 
+  dplyr::filter(between(date, date_min_tallies, date_max_tallies) & rday == 1) %>% summarise(n = round(dplyr::n_distinct(resident_id) * 1.123865 + .49)) %>% .$n  
+
+desc_residents$CT_total_residents_england <- tline %>% 
+  dplyr::inner_join(select(filter(reference_homes, country == "England"), home_code)) %>%
+  dplyr::filter(between(date, date_min_tallies, date_max_tallies) & rday == 1) %>%
+  summarise(n = round(dplyr::n_distinct(resident_id) * 1.087621 + .49)) %>% .$n   
+
 desc_residents$CT_total_symptomatic <- sum(new_cases$new_symptomatic_home, na.rm=T) + 
   sum(new_cases$new_symptomatic_hospital, na.rm=T)
 desc_residents$CT_total_symptomatic_denom <- sum(km_ct_residents_symp$n_t)
@@ -563,7 +585,7 @@ desc_residents_outbreak_only$CT_total_beds <- beds %>%
   
 desc_residents_outbreak_only$CT_total_residents <- residents_overview %>% 
   dplyr::filter(home_code %in% desc_residents_outbreak_only$outbreak_homes) %>% 
-  dplyr::summarise(total_residents = round(dplyr::n_distinct(resident_id)* 1.1151324 + .49)) %>% 
+  dplyr::summarise(total_residents = round(dplyr::n_distinct(resident_id)* 1.122205 + .49)) %>% 
   .$total_residents
 
 
@@ -661,58 +683,55 @@ tab_zero_cases <- table_nums(
 ## FIGURES
 fig_nums <- captioner(prefix = "Figure")
 
-fig_KM_CT_residents_symptomatic <- fig_nums(
-  name = "fig_KM_CT_residents_symptomatic",
-  caption = paste0("Kaplan-Meier estimates of the cumulative probability of residents becoming symptomatic based on care home manager daily counts")
+fig_KM_CT_residents <- fig_nums(
+  name = "fig_KM_CT_residents",
+  caption = paste0("Kaplan-Meier estimates of the cumulative incidence of symptomatic cases, confirmed infections and COVID-related deaths in residents according to FSHCG outbreak surveillance reports (", format(date_min_tallies, "%d/%m/%y"), "-", format(date_max_tallies, "%d/%m/%y"), ")")
 )
-fig_KM_residents_confirmed <- fig_nums(
-  name = 'fig_KM_residents_confirmed',
-  caption = paste0("Kaplan-Meier estimates of the cumulative probability of residents (n=",
-  formatbm(dplyr::n_distinct(residents_overview$resident_id)),
-  ") becoming confirmed cases based on Datix incidents report"))
-fig_KM_CT_confirmed_residents <- fig_nums(
-  name = 'fig_KM_CT_confirmed_residents',
-  caption = "Kaplan-Meier estimates of the cumulative probability of residents becoming confirmed cases based on care home manager daily counts")
+
+fig_KM_staff <- fig_nums(
+  name = 'fig_KM_staff',
+  caption = paste0("Kaplan-Meier estimates of the cumulative incidence of symptomatic cases, confirmed infection in care home staff (n=",   formatbm(desc_staff$total_staff),
+  ") according to FSHCG outbreak surveillance reports (", format(date_min_tallies, "%d/%m/%y"), "-", format(date_max_tallies, "%d/%m/%y"), ")"))
+
 fig_KM_mortality <- fig_nums(
   "fig_KM_mortality",
   caption = paste0("Kaplan-Meier estimates of resident (n=",
   formatbm(dplyr::n_distinct(residents_overview$resident_id)),
   ") survival by SARS-COV-2 case type"))
-fig_KM_staff_symptomatic <- fig_nums(
-  name = 'fig_KM_staff_symptomatic',
-  caption = paste0("Kaplan-Meier estimates of the cumulative probability of care home staff (n=",   formatbm(desc_staff$total_staff),
-  ") becoming symptomatic cases based on manager-reported daily counts"))
-fig_KM_staff_confirmed <- fig_nums(
-  name = 'fig_KM_staff_confirmed',
-  caption = paste0("Kaplan-Meier estimates of the cumulative probability of care home staff (n=",   formatbm(desc_staff$total_staff),
-  ") becoming confirmed cases based on manager-reported daily counts"))
 
 ```
 
 
-```{r period_prevalence}
-cis_data <- list(
-  n_positive = 66,
-  n_negative = 60618
+```{r period_prevalence, message=F}
+# Cumulative sample counts, directly standardised for
+# 11 May to 24 May
+# 25 May to 7 June
+
+england_results <- list(
+  date_min = as.Date("2020-05-11"),
+  date_max = as.Date("2020-06-07"),
+  cis_confirmed = 35,
+  cis_person_days = 483259
 )
 
-england_results <- list()
-england_results$n_positive = sum(inner_join(new_cases, filter(reference_homes, country == "England"))[c("new_confirmed_home", "new_confirmed_hospital")], na.rm = T)
-england_results$n_negative = desc_residents$CT_total_residents_england  - england_results$n_positive
+england_results$FSHC_confirmed <- new_cases %>% 
+  filter(between(date, england_results$date_min, england_results$date_max)) %>% 
+  inner_join(filter(reference_homes, country == "England")) %>% 
+  summarise(
+    n = sum(new_confirmed_home, na.rm = T) + sum(new_confirmed_hospital, na.rm = T)
+  ) %>% 
+  .$n
 
+england_results$FSHC_resident_days <- filter(km_ct_residents_confirmed,
+  between(date, england_results$date_min, england_results$date_max)) %>% 
+  summarise(n = sum(n_t, na.rm = T) ) %>% 
+  .$n
 
-
-england_results$RR_england <- relative_risk(
-  a = england_results$n_positive,
-  b = england_results$n_negative,
-  c = cis_data$n_positive,
-  d = cis_data$n_negative)
-
-england_results$RR_SE <- relative_risk_SE(
-  a = england_results$n_positive,
-  b = england_results$n_negative,
-  c = cis_data$n_positive,
-  d = cis_data$n_negative)
+england_results$results <- epitools::rateratio.wald(
+  c(england_results$cis_confirmed,
+    england_results$FSHC_confirmed,
+    england_results$cis_person_days,
+    england_results$FSHC_resident_days))
 ```
 
 # Abstract
@@ -721,9 +740,9 @@ england_results$RR_SE <- relative_risk_SE(
 
 **Methods:** Retrospective cohort study using individual-level electronic records from residents (incidents reports) and daily care home counts of infection for both residents and staff. We estimated the incidence proportion and incidence rate of symptoms, confirmed infection, and death in residents and staff, and compare them with findings from a national community survey. We tested a range of risk factors for resident infections in multivariate regression models.
 
-**Findings:** An estimated `r formatbm(desc_residents$CT_total_residents)` residents were present in `r dplyr::n_distinct(residents$home_code)` FSHCG homes between `r format(date_min_tallies, "%e %B %Y")` and `r format(date_max_tallies, "%e %B %Y")`. During the period `r formatbm(desc_residents$CT_total_symptomatic_denom)` residents developed COVID-19 symptoms (`r tbrounding(desc_residents$CT_p_symptomatic)`% [95% confidence interval: `r tbrounding(desc_residents$CT_p_symptomatic_lower)`%; `r tbrounding(desc_residents$CT_p_symptomatic_upper)`%]), and `r formatbm(desc_residents$CT_total_confirmed)` (`r tbrounding(desc_residents$CT_p_confirmed)`% [`r tbrounding(desc_residents$CT_p_confirmed_lower)`%; `r tbrounding(desc_residents$CT_p_confirmed_upper)`%]) had an infection confirmed with nasopharyngeal RNA tests. Across all care homes, the confirmed infection rate of incidence was `r tbrounding(desc_residents$CT_IR_confirmed)` per 100,000 resident-days [`r tbrounding(desc_residents$CT_IR_confirmed_lower)`; `r tbrounding(desc_residents$CT_IR_confirmed_upper)`]. In England, `r england_results$n_positive` infections were confirmed of a total `r formatbm(england_results$n_positive + england_results$n_negative)` residents. Comparing with the community, the relative risk of confirmed cases in England was `r tbrounding(england_results$RR_england)` [`r tbrounding(exp(log(england_results$RR_england) - 1.96 * england_results$RR_SE)) `; `r tbrounding(exp(log(england_results$RR_england) + 1.96 * england_results$RR_SE))`]. These estimates include `r desc_residents$CT_zero_case`/`r desc_residents$total_homes` homes (`r tbrounding( desc_residents$CT_zero_case/desc_residents$total_homes*100)`%) that had not reported a single confirmed case.
-
-The staff-to-bed ratio was the only factor to be independently associated with the rate of confirmed cases: an increase by 10 percentage point in the number of staff relative to the bed total was associated with a 13% reduction [9%, 18%] in the rate of confirmed cases. Out of `r formatbm(desc_staff$total_staff)` staff, `r formatbm(desc_staff$CT_confirmed_total)` confirmed infections were counted(
+**Findings:** An estimated `r formatbm(desc_residents$CT_total_residents)` residents were present in `r dplyr::n_distinct(residents$home_code)` FSHCG homes between `r format(date_min_tallies, "%e %B %Y")` and `r format(date_max_tallies, "%e %B %Y")`. During the period `r formatbm(desc_residents$CT_total_symptomatic_denom)` residents developed COVID-19 symptoms (`r tbrounding(desc_residents$CT_p_symptomatic)`% [95% confidence interval: `r tbrounding(desc_residents$CT_p_symptomatic_lower)`%; `r tbrounding(desc_residents$CT_p_symptomatic_upper)`%]), and `r formatbm(desc_residents$CT_total_confirmed)` (`r tbrounding(desc_residents$CT_p_confirmed)`% [`r tbrounding(desc_residents$CT_p_confirmed_lower)`%; `r tbrounding(desc_residents$CT_p_confirmed_upper)`%]) had an infection confirmed with nasopharyngeal RNA tests. Across all care homes, the confirmed infection rate of incidence was `r tbrounding(desc_residents$CT_IR_confirmed)` per 100,000 resident-days [`r tbrounding(desc_residents$CT_IR_confirmed_lower)`; `r tbrounding(desc_residents$CT_IR_confirmed_upper)`].  These estimates include `r desc_residents$CT_zero_case`/`r desc_residents$total_homes` homes (`r tbrounding( desc_residents$CT_zero_case/desc_residents$total_homes*100)`%) that had not reported a single confirmed case.
+In a comparison with results from an English household survey, we estimated a confirmed infection rate ratio of `r tbrounding(england_results$results$measure[2,"estimate"])` [`r tbrounding(england_results$results$measure[2,"lower"]) `; `r tbrounding(england_results$results$measure[2,"upper"])`] in care homes compared with the community in England between `r format(england_results$date_min, "%e %B %Y")` and `r format(england_results$date_max, "%e %B %Y")`.
+The staff-to-bed ratio was the main organisational factor to be independently associated with the rate of confirmed cases: an increase by 10 percentage point in the number of staff relative to the bed total was associated with a 13% reduction [9%, 18%] in the rate of confirmed cases. Out of `r formatbm(desc_staff$total_staff)` staff, `r formatbm(desc_staff$CT_confirmed_total)` confirmed infections were counted(
 `r tbrounding(desc_staff$CT_confirmed_p)`% [`r tbrounding(desc_staff$CT_confirmed_p_lower)`%; `r tbrounding(desc_staff$CT_confirmed_p_upper)`%]), corresponding to a rate of incidence of 
 `r tbrounding(desc_staff$CT_confirmed_IR)` per 100,000 staff-days [`r tbrounding(desc_staff$CT_symptomatic_IR_lower)`; `r tbrounding(desc_staff$CT_symptomatic_IR_upper)`].
 
@@ -757,7 +776,7 @@ FSHCG collects administrative data on their private residents through a variety 
 mutate_all(desc_homes,  .funs = formatbm) %>% arrange(gsub("FSHC ", "", Scope)) %>% t %>% kable
 ``` 
 
-## Aggregate outbreak data (`r format(date_min_tallies, "%d/%m/%Y")`--`r format(date_max_tallies, "%d/%m/%Y")` )
+## Aggregate outbreak data (`r format(date_min_tallies, "%d/%m/%Y")`--`r format(date_max_tallies, "%d/%m/%Y")`)
 
 On 24 March 2020, FSHCG introduced a bespoke reporting system to monitor COVID-19 cases in each care home. This new system requires care home managers to report daily tallies of symptomatic and confirmed infections identified among staff and residents to their FSHCG regional manager.
 
@@ -776,7 +795,7 @@ In addition, the number of beds currently occupied was reported every Sunday. Th
 These counts include events relating to residents occupying local authority contract beds as well as a minority of residents receiving a different category of support (eg. young people) who were excluded from the study population.
 
 
-## Individual-level residents data (`r format(date_min, "%d/%m/%Y")`--`r format(date_max, "%d/%m/%Y")` )
+## Individual-level residents data (`r format(date_min, "%d/%m/%Y")`--`r format(date_max, "%d/%m/%Y")`)
 
 Secondary use individual-level data were extracted and pseudonymised by HW. They consisted of two datasets:
 
@@ -789,10 +808,10 @@ HW created a resident index file bridging the two datasets using: the first thre
 
 The two sources of data were employed for separate purposes. 
 
-Incidence proportions and rates were calculated using the aggregate outbreak counts, since they were the trusted source of information and encompass all residents. The number of unique residents $N$ present in the homes at some point between `r format(date_min_tallies, "%e %B %Y")` and `r format(date_max_tallies, "%e %B %Y")`  was estimated by multiplying the number of private residents (from the individual-level dataset) by the ratio of the total resident-days (from the weekly occupancy censuses) to the total private resident-days (from the individual data). This approach assumes that the mean stay of local authority residents is identical to that of private residents (supplementary material 1). As the total exposed-to-risk (susceptible resident-days) was unknown, it was approximated in a multiple decrement life table by making the assumption that previously symptomatic/confirmed residents were discharged at the same rate as susceptible residents, as was suggested by the individual-level records. Admitted cases were accounted for in the daily new case count. Based on this $\hat{E_t}$, the estimated number or previously symptomatic/confirmed residents present in the home on day $t$ was computed as
+Incidence proportions and rates were calculated using the aggregate outbreak counts, since they were the trusted source of information and encompass all residents. The number of unique residents $N$ present in the homes at some point between `r format(date_min_tallies, "%e %B %Y")` and `r format(date_max_tallies, "%e %B %Y")`  was estimated by multiplying the number of private residents (from the individual-level dataset) by the ratio of the total resident-days (from the weekly occupancy censuses) to the total private resident-days (from the individual data). This approach assumes that the mean stay of local authority residents is identical to that of private residents (supplementary material 1). As the total exposed-to-risk (susceptible resident-days) was unknown, it was approximated in a multiple decrement life table by making the assumption that previously symptomatic/confirmed residents were discharged at the same rate as susceptible residents, as was suggested by the individual-level records. Admitted cases were accounted for in the daily new case count. Based on this $\hat{I_t}$, the estimated number or previously symptomatic/confirmed residents present in the home on day $t$ was computed as
 
-$$\hat{E_t} = min(n_{t}/n_{t-1}, 1)( \hat{E}_{t-1} + d_{t-1}); \qquad  \qquad  \qquad E_{t_0} = 0$$
-where $d_{t}$ denotes the number of new cases for each day $t = \{1, \ldots, T\}$, while $min(n_{t}/n_{t-1}, 1)$ acts as an (underestimated) approximation of the discharge rate. The total exposure time was calculated as $ \sum_{t=1}^T (N_t - \hat{E_t})$ where $N_t$ denotes daily occupancy figures. The incidence proportion of confirmed cases in England was contrasted with incidence measured from a sample survey of English private households which tested nose/throat swabs from 26,995 individuals between 26 April and 13 June 2020.[@cisbulletin2020; @cisdata2020]
+$$\hat{I_t} = min(n_{t}/n_{t-1}, 1)( \hat{E}_{t-1} + d_{t-1}); \qquad  \qquad  \qquad I_{t_0} = 0$$
+where $d_{t}$ denotes the number of new cases for each day $t = \{0, \ldots, T\}$, while $min(n_{t}/n_{t-1}, 1)$ acts as an (underestimated) approximation of the discharge rate. The total exposure time was calculated as $\sum_{t=0}^{T} (N_t-\hat{I}_t)$ where $N_t$ denotes daily occupancy figures. The incidence proportion of confirmed cases in England was contrasted with incidence measured from a sample survey of English private households which tested nose/throat swabs from 26,995 individuals between 26 April and 13 June 2020.[@cisbulletin2020; @cisdata2020]
 
 As for individual-level data, they were known to be subject to underreporting of infection cases as well as to exclude residents occupying local authority contracted beds. In spite of this, individual-level provided an accurate of the duration of exposure in resident-days as well as right-censoring, since individual records indicate when a resident was discharged or died. By assuming underreporting of cases to affect residents conditionally at random, it was possible to use the data to study factors associated with the rate of infection and fatalities. A Cox proportional hazards model was used to test the effect of both individual-level risk factors (sex, age, care type) and organisation-level risk factors (region, care home size, staff-to-bed ratio, mean bed occupancy proportion). Dates of death were used to estimate the case-fatality rate, as well as compare all-cause mortality based on the presence of symptoms and infection confirmation. A time-dependent Cox proportional hazards model analysed the effect of the same factors on all-cause mortality based on the time-dependent infection classification (susceptible; symptomatic not confirmed; asymptomatic confirmed; symptomatic confirmed).
 
@@ -805,8 +824,6 @@ Data were analysed in `R`3·5·0[@RCoreTeam2018] using the `epitool`[@Aragon2020
 ## Descriptives
 
 The study population consisted of an estimated `r formatbm(desc_residents$CT_total_residents)` residents across England, Scotland and Northern Ireland. This included `r formatbm(desc_residents$DAT_total_residents)` (`r tbrounding(desc_residents$DAT_total_residents/desc_residents$CT_total_residents*100)`%) private residents, the vast majority (85·4%) of whom were permanent residents. Characteristics of private residents could be described from individual-level records (`r table_nums("tab_resident_descriptives", display = "cite")`); `r tbrounding(mean(residents$home_type=="Nursing")*100)`% were in nursing homes, and 39·2% received dementia care.
-
-
 
 
 `r table_nums("tab_resident_descriptives")`
@@ -834,36 +851,40 @@ Between `r format(date_min_tallies, "%e %B %Y")` and `r format(date_max_tallies,
 |	Incidence proportion (%)  | `r tbrounding(desc_residents$CT_p_symptomatic)` [`r tbrounding(desc_residents$CT_p_symptomatic_lower)`; `r tbrounding(desc_residents$CT_p_symptomatic_upper)`]| `r tbrounding(desc_residents$CT_p_confirmed)` [`r tbrounding(desc_residents$CT_p_confirmed_lower)`; `r tbrounding(desc_residents$CT_p_confirmed_upper)`] | 	`r tbrounding(desc_staff$CT_symptomatic_p)` [`r tbrounding(desc_staff$CT_symptomatic_p_lower)`; `r tbrounding(desc_staff$CT_symptomatic_p_upper)`]	| `r tbrounding(desc_staff$CT_confirmed_p)` [`r tbrounding(desc_staff$CT_confirmed_p_lower)`; `r tbrounding(desc_staff$CT_confirmed_p_upper)`] |
 |	Incidence rate (per 100,000) | `r tbrounding(desc_residents$CT_IR_symptomatic)` [`r tbrounding(desc_residents$CT_IR_symptomatic_lower)`; `r tbrounding(desc_residents$CT_IR_symptomatic_upper)`] |`r tbrounding(desc_residents$CT_IR_confirmed)` [`r tbrounding(desc_residents$CT_IR_confirmed_lower)`; `r tbrounding(desc_residents$CT_IR_confirmed_upper)`] | `r tbrounding(desc_staff$CT_symptomatic_IR)` [`r tbrounding(desc_staff$CT_symptomatic_IR_lower)`; `r tbrounding(desc_staff$CT_symptomatic_IR_upper)`]| `r tbrounding(desc_staff$CT_confirmed_IR)` [`r tbrounding(desc_staff$CT_symptomatic_IR_lower)`; `r tbrounding(desc_staff$CT_symptomatic_IR_upper)`] |
  
-FSHCG residents underwent reverse transcriptase polymerase chain reaction (RT-PCR) viral antigen diagnostics based on nose and throat swab antigen tests during hospitalisations in the first instance, but such tests later became available in care homes from ***XXXXX***. From 11 May 2020, most FSHCG home undertook testing every resident as part of the whole home testing programme.[@dhscTesting2020] Between `r format(date_min_tallies, "%e %B %Y")` and `r format(date_max_tallies, "%e %B %Y")`  `r formatbm(sum(new_cases$new_confirmed_home, na.rm = T))` residents had an infection confirmed in homes while `r formatbm(sum(new_cases$new_confirmed_hospital, na.rm = T))` had an infection confirmed in hospital. The overall confirmed infection incidence proportion was `r tbrounding(desc_residents$CT_p_confirmed)`% [`r tbrounding(desc_residents$CT_p_confirmed_lower)`%; `r tbrounding(desc_residents$CT_p_confirmed_upper)`%, with an incidence rate of `r tbrounding(desc_residents$CT_IR_confirmed)` per 100,000 [`r tbrounding(desc_residents$CT_IR_confirmed_lower)`; `r tbrounding(desc_residents$CT_IR_confirmed_upper)`].
+FSHCG residents underwent reverse transcriptase polymerase chain reaction (RT-PCR) viral antigen diagnostics based on nose and throat swab antigen tests during hospitalisations in the first instance, but such tests later became available in care homes from 6 April 2020. From 11 May 2020, most FSHCG home undertook testing every resident as part of the whole home testing programme.[@dhscTesting2020] Between `r format(date_min_tallies, "%e %B %Y")` and `r format(date_max_tallies, "%e %B %Y")`  `r formatbm(sum(new_cases$new_confirmed_home, na.rm = T))` residents had an infection confirmed in homes while `r formatbm(sum(new_cases$new_confirmed_hospital, na.rm = T))` had an infection confirmed in hospital. The overall confirmed infection incidence proportion was `r tbrounding(desc_residents$CT_p_confirmed)`% [`r tbrounding(desc_residents$CT_p_confirmed_lower)`%; `r tbrounding(desc_residents$CT_p_confirmed_upper)`%, with an incidence rate of `r tbrounding(desc_residents$CT_IR_confirmed)` per 100,000 [`r tbrounding(desc_residents$CT_IR_confirmed_lower)`; `r tbrounding(desc_residents$CT_IR_confirmed_upper)`].
 
-Kaplan-Meier estimates of the temporal trend in symptomatic and confirmed cases (`r fig_nums("fig_KM_CT_residents_symptomatic", display = "cite")`, `r fig_nums("fig_KM_CT_residents_confirmed", display = "cite")`) indicate wide variation across the UK. We note a strong progression of infections in the North West, North East and South East of England, where more than 1 in 5 residents had a confirmed infection. The sharp increase in confirmed infections in the North West between 30 April and 2 May (67 new cases) can largely be attributed to the piloting of whole-home testing in one care home, leading to 42 cases being confirmed.
+Kaplan-Meier estimates of the temporal trend in symptomatic and confirmed cases (`r fig_nums("fig_KM_CT_residents_symptomatic", display = "cite")`, `r fig_nums("fig_KM_CT_confirmed_residents", display = "cite")`) indicate wide variation across the UK. We note a strong progression of infections in the North West, North East and South East of England, where more than 1 in 5 residents had a confirmed infection. The sharp increase in confirmed infections in the North West between 30 April and 2 May (67 new cases) can largely be attributed to the piloting of whole-home testing in one care home, leading to 42 cases being confirmed.
 
 
 ```{r KM_CT_residents_symptomatic, fig.height = 4, fig.width = 8}
-order_key <-km_ct_residents_symp %>% 
-  group_by(region_UK) %>% 
-  summarise(S_t = min(S_t)) %>% 
-  arrange(S_t)
-km_ct_residents_symp$region_UK <- factor(
-  km_ct_residents_symp$region_UK,
-  levels = order_key$region_UK
+all_km_residents <- bind_rows(
+  km_ct_residents_symp,
+  km_ct_residents_confirmed,
+  km_ct_residents_deaths
 )
-km_ct_residents_symp$region_group <- cut(as.integer(km_ct_residents_symp$region_UK), 2, labels = 1:2)
+all_km_residents$Event <- factor(
+  all_km_residents$event,
+  levels = c(
+    "Symptomatic case",
+    "Confirmed infection",
+    "Death"
+  )
+)
 
 ggplot(aes(x = date, y = 1-S_t, 
            ymax = 1 - St_max,
            ymin = 1 - St_min,
-           color = region_UK), data = km_ct_residents_symp) +
+           color = Event), data = all_km_residents) +
   # facet_grid(region_group ~ .) +
   geom_ribbon(alpha=0.05, linetype = 2,stat = ) +
   geom_path(lwd=1.2) +
-  scale_y_continuous("Cum probability symptomatic case",
+  scale_y_continuous("Cum probability",
                      breaks = seq(0,1,.05)) +
-  scale_color_discrete("Region") +
+  ggsci::scale_color_lancet() +
   scale_x_date(name = "Date", 
-               breaks = unique(get_monday_date(km_ct_residents_symp$date)),
+               breaks = unique(get_monday_date(all_km_residents$date)),
                labels = format.Date(
-                 unique(get_monday_date(km_ct_residents_symp$date)),
+                 unique(get_monday_date(all_km_residents$date)),
                  "%d/%m/%y"
                )) +
   theme_bw()  +
@@ -871,76 +892,42 @@ ggplot(aes(x = date, y = 1-S_t,
 
 ```
 
-`r fig_nums("fig_KM_CT_residents_symptomatic")`
+`r fig_nums("fig_KM_CT_residents")`
 
 
+For England only, `r england_results$FSHC_confirmed` infections were confirmed of a total `r formatbm(england_results$FSHC_resident_days)` residents-days between `r format((england_results$date_min), "%e %B %Y")` and `r format((england_results$date_man), "%e %B %Y")`. In comparison, the survey of English community households[@cisbulletin2020] found a total of `r england_results$FSHC_confirmed` confirmed cases out of `r formatbm(england_results$FSHC_confirmed)` person-days during this period. This implies a confirmed infection rate ratio of `r tbrounding(england_results$results$measure[2,"estimate"])` [`r tbrounding(england_results$results$measure[2,"lower"]) `; `r tbrounding(england_results$results$measure[2,"upper"])`].
 
-```{r KM_CT_residents_infection, fig.height = 4, fig.width = 8}
-order_key <-km_ct_residents_confirmed %>% 
-  group_by(region_UK) %>% 
-  summarise(S_t = min(S_t)) %>% 
-  arrange(S_t)
-km_ct_residents_confirmed$region_UK <- factor(
-  km_ct_residents_confirmed$region_UK,
-  levels = order_key$region_UK
-)
-km_ct_residents_confirmed$region_group <- cut(as.integer(km_ct_residents_confirmed$region_UK), 2, labels = 1:2)
-
-ggplot(aes(x = date, y = 1-S_t, 
-           ymax = 1 - St_max,
-           ymin = 1 - St_min,
-           color = region_UK), data = km_ct_residents_confirmed) +
-  # facet_grid(region_group ~ .) +
-  geom_ribbon(alpha=0.05, linetype = 2,stat = ) +
-  geom_path(lwd=1.2) +
-  scale_y_continuous("Cum probability confirmed case",
-                     breaks = seq(0,1,.02)) +
-  scale_color_discrete("Region") +
-  scale_x_date(name = "Date", 
-               breaks = unique(get_monday_date(km_ct_residents_confirmed$date)),
-               labels = format.Date(
-                 unique(get_monday_date(km_ct_residents_confirmed$date)),
-                 "%d/%m/%y"
-               )) +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 25, vjust = 1, hjust=1))
-
-```
-
-`r fig_nums("fig_KM_CT_confirmed_residents")`
-
-For England only, a total of `r england_results$n_positive` confirmed cases occurred out of a total `r formatbm(england_results$n_positive + england_results$n_negative)` residents. In comparison, the survey of English community households[@cisbulletin2020] found a total of `r cis_data$n_positive` confirmed cases out of `r formatbm(cis_data$n_positive + cis_data$n_negative)` sampled individuals. This implies a relative risk of `r tbrounding(england_results$RR_england)` [`r tbrounding(exp(log(england_results$RR_england) - 1.96 * england_results$RR_SE)) `; `r tbrounding(exp(log(england_results$RR_england) + 1.96 * england_results$RR_SE))`].
-
-Incidence proportions and rates were also estimated for private residents only using the Datix incident reports dataset (supplementary material 1-2). Estimates are lower than corresponding estimates based on outbreak counts. This is thought to be caused by a combination of underascertainment as well as linkage error.
+Incidence proportions and rates were also estimated separately for private residents using the Datix incident reports dataset (supplementary material 1-2). Estimates are lower than estimates in `r table_nums("supp_epi_CT", display = "cite")`. This is thought to be caused by a combination of underascertainment as well as linkage error affecting incidents reports.
 
 
 ### Staff cases
 
-Out of a total `r formatbm(desc_staff$total_staff)` staff,  `r formatbm(desc_staff$CT_symptomatic_total)`	(`r tbrounding(desc_staff$CT_symptomatic_p)`% [`r tbrounding(desc_staff$CT_symptomatic_p_lower)`%; `r tbrounding(desc_staff$CT_symptomatic_p_upper)`%]) were recorded as having symptoms by FSHCG managers. In total, `r formatbm(desc_staff$CT_confirmed_total)` (	`r tbrounding(desc_staff$CT_confirmed_p)`% [`r tbrounding(desc_staff$CT_confirmed_p_lower)`%; `r tbrounding(desc_staff$CT_confirmed_p_upper)`%]) staff had a confirmed infection by the end of the period. Regional trends (`r fig_nums("fig_KM_staff_symptomatic", display="cite")`, `r fig_nums("fig_KM_staff_confirmed", display="cite")`) indicate a strong progression of infections in the North West, North East and South East of England.
+Out of a total `r formatbm(desc_staff$total_staff)` staff,  `r formatbm(desc_staff$CT_symptomatic_total)`	(`r tbrounding(desc_staff$CT_symptomatic_p)`% [`r tbrounding(desc_staff$CT_symptomatic_p_lower)`%; `r tbrounding(desc_staff$CT_symptomatic_p_upper)`%]) were reported to have symptoms by FSHCG managers between `r format(date_min_tallies, "%e %B %Y")` and `r format(date_max_tallies, "%e %B %Y")`. During the same period, `r formatbm(desc_staff$CT_confirmed_total)` (`r tbrounding(desc_staff$CT_confirmed_p)`% [`r tbrounding(desc_staff$CT_confirmed_p_lower)`%; `r tbrounding(desc_staff$CT_confirmed_p_upper)`%]) staff were reported to have had a confirmed infection. Regional trends (`r fig_nums("fig_KM_staff_symptomatic", display="cite")`, `r fig_nums("fig_KM_staff_confirmed", display="cite")`) once again indicate a strong progression of infections in the North West, North East and South East of England.
 
 
-```{r KM_Staff_Symptomatic, fig.height = 4, fig.width = 8}
-
-order_key <-km_staff_symptomatic %>% 
-  group_by(region_UK) %>% 
-  summarise(S_t = min(S_t)) %>% 
-  arrange(S_t)
-km_staff_symptomatic$region_UK <- factor(
-  km_staff_symptomatic$region_UK,
-  levels = order_key$region_UK
+```{r KM_Staff, fig.height = 4, fig.width = 8}
+all_km_staff <- bind_rows(
+  km_staff_symptomatic,
+  km_staff_confirmed
 )
-km_staff_symptomatic$region_group <- cut(as.integer(km_staff_symptomatic$region_UK), 2, labels = 1:2)
+all_km_staff$Event <- factor(
+  all_km_staff$event,
+  levels = c(
+    "Symptomatic case",
+    "Confirmed infection"
+  )
+)
 
 ggplot(aes(x = date, y = 1-S_t, 
            ymax = 1 - St_max,
            ymin = 1 - St_min,
-           color = region_UK), data = km_staff_symptomatic) +
+           color = Event), data = all_km_staff) +
   # facet_grid(region_group ~ .) +
   geom_ribbon(alpha=0.05, linetype = 2,stat = ) +
   geom_path(lwd=1.2) +
-  scale_color_discrete("Region") +  
+  ggsci::scale_color_lancet()+
   scale_y_continuous("Cum probability symptomatic case",
-                     breaks = seq(0,1,.05)) +
+                     breaks = seq(0,1,.02)) +
   scale_x_date(name = "Date", 
                breaks = unique(get_monday_date(km_staff_symptomatic$date)),
                labels = format.Date(
@@ -952,50 +939,12 @@ ggplot(aes(x = date, y = 1-S_t,
   
 ```
 
-`r fig_nums("fig_KM_staff_symptomatic")`
-
-
-```{r KM_Staff_Confirmed, fig.height = 4, fig.width = 8}
-
-order_key <- km_staff_confirmed %>% 
-  group_by(region_UK) %>% 
-  summarise(S_t = min(S_t)) %>% 
-  arrange(S_t)
-km_staff_confirmed$region_UK <- factor(
-  km_staff_confirmed$region_UK,
-  levels = order_key$region_UK
-)
-km_staff_confirmed$region_group <- cut(as.integer(km_staff_confirmed$region_UK), 2, labels = 1:2)
-
-
-ggplot(aes(x = date, y = 1-S_t, 
-           ymax = 1 - St_max,#(S_t + 1.96 * S_t_SE),
-           ymin = 1 - St_min, #(S_t - 1.96 * S_t_SE),
-           color = region_UK), data = km_staff_confirmed) +
-  # facet_grid(region_group ~ .) +
-  geom_ribbon(alpha=0.05, linetype = 2,stat = ) +
-  geom_path(lwd=1.2) +
-  scale_color_discrete("Region") +
-  scale_y_continuous("Cum probability confirmed case",
-                     breaks = seq(0,1,.01)) +
-  scale_x_date(name = "Date", 
-               breaks = unique(get_monday_date(km_staff_confirmed$date)),
-               labels = format.Date(
-                 unique(get_monday_date(km_staff_confirmed$date)),
-                 "%d/%m/%y"
-               )) +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 25, vjust = 1, hjust=1))
-
-```
-
-`r fig_nums("fig_KM_staff_confirmed")`
+`r fig_nums("fig_KM_staff")`
 
 
 ### Outbreak homes
 
-Between `r format(date_min_tallies, "%e %B %Y")` and `r format(date_max_tallies, "%e %B %Y")`, `r desc_residents$CT_zero_case`/`r desc_residents$total_homes` homes (`r tbrounding( desc_residents$CT_zero_case/desc_residents$total_homes*100)`%) care homes had not reported a single confirmed infection, whether acquired in the home or in hospital (`r table_nums("tab_zero_cases", display="cite")`).  
-
+Between `r format(date_min_tallies, "%e %B %Y")` and `r format(date_max_tallies, "%e %B %Y")`, `r desc_residents$CT_zero_case`/`r desc_residents$total_homes` homes (`r tbrounding( desc_residents$CT_zero_case/desc_residents$total_homes*100)`%) care homes had not reported a single confirmed infection, whether acquired in the home or in hospital (supplementary material 3). Incidence estimates are reported for those homes separately in `r table_nums("tab_zero_cases", display="cite")`.
 
 
 `r table_nums("supp_epi_CT_oubreak_only")`
@@ -1007,22 +956,43 @@ Between `r format(date_min_tallies, "%e %B %Y")` and `r format(date_max_tallies,
 |	Total exposure (days)| `r formatbm(desc_residents_outbreak_only$CT_total_symptomatic_denom)`	|`r formatbm(desc_residents_outbreak_only$CT_total_confirmed_denom)`
 |	Incidence proportion (%)  | `r tbrounding(desc_residents_outbreak_only$CT_p_symptomatic)` [`r tbrounding(desc_residents_outbreak_only$CT_p_symptomatic_lower)`; `r tbrounding(desc_residents_outbreak_only$CT_p_symptomatic_upper)`]| `r tbrounding(desc_residents_outbreak_only$CT_p_confirmed)` [`r tbrounding(desc_residents_outbreak_only$CT_p_confirmed_lower)`; `r tbrounding(desc_residents_outbreak_only$CT_p_confirmed_upper)`] | 
 |	Incidence rate (per 100,000) | `r tbrounding(desc_residents_outbreak_only$CT_IR_symptomatic)` [`r tbrounding(desc_residents_outbreak_only$CT_IR_symptomatic_lower)`; `r tbrounding(desc_residents_outbreak_only$CT_IR_symptomatic_upper)`] |`r tbrounding(desc_residents_outbreak_only$CT_IR_confirmed)` [`r tbrounding(desc_residents_outbreak_only$CT_IR_confirmed_lower)`; `r tbrounding(desc_residents_outbreak_only$CT_IR_confirmed_upper)`] |
+
+```{r factors_outbreak}
+home_total_confirmed$outbreak <-  as.factor(home_total_confirmed$CT_confirmed>0)
+# # factors_outbreak <- glm( 
+# #   outbreak ~ staff_to_bed_ratio + bed_tot_category + 
+# #     pct_occupancy +occ_bedroom_ratio + region_UK , 
+# #   family = binomial(), data = home_total_confirmed)
+# # summary(factors_outbreak)
+# explanatory = c( "bed_tot_category", "pct_occupancy", "staff_to_bed_ratio",
+#                  "occ_bedroom_ratio",
+#                  #"younger_person", "residential_general", "factor(residential_dementia)",
+#                  # "nursing_general","nursing_dementia", 
+#                  "region_UK")
+# dependent = "outbreak"
+# odds_outbreak <-  finalfit(home_total_confirmed,
+#                            dependent, 
+#                            explanatory, column = T,
+#                            add_dependent_label = F)  
+# knitr::kable(odds_outbreak,
+#              row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
+#  
+# ggplot(home_total_confirmed, aes(occ_bedroom_ratio, pct_occupancy, colour = outbreak)) +
+#   geom_point()
+```
  
-
-
-
-
 
 ## Factors associated with confirmed infections
 
-Using the individual-level data on private bed residents (`table_nums("tab_resident_descriptives", display = "cite")`), factors affecting the rate of confirmed cases were investigated in a Cox Proportional Hazard model (`r table_nums("tab_CoxPH_confirmed", display = "cite")`). According to this, and other than geographical location, the staff-to-bed ratio was the only factor significantly associated with the rate of confirmed cases. An increase by 10 percentage point in the staff headcount relative to the total bed count was associated with a 13% reduction [9%; 18%] in the rate of confirmed cases.
+ 
+Using the individual-level data on private bed residents (`r table_nums("tab_resident_descriptives", display = "cite")`), factors affecting the rate of confirmed cases were investigated in a Cox Proportional Hazard model (`r table_nums("tab_CoxPH_confirmed", display = "cite")`). According to this, and other than geographical location, the staff-to-bed ratio was the only factor significantly associated with the rate of confirmed cases. An increase by 10 percentage point in the staff headcount relative to the total bed count was associated with a 13% reduction [9%; 18%] in the rate of confirmed cases.
 
 
 `r table_nums("tab_CoxPH_confirmed")`
 
 ```{r CPH_confirmed,   results="asis"}
-cph_conf <- coxph(Surv(time = start_int, time2 = stop_int +1, event = confirmed) ~ gender + ageg+home_type+user_type2+region_UK+ staff_to_bed_ratio+bed_tot_category + scale(pct_occupancy, scale = F), data = residents_overview)
- summary(cph_conf)
+# cph_conf <- coxph(Surv(time = start_int, time2 = stop_int +1, event = confirmed) ~ gender + ageg+home_type+user_type2+region_UK+ staff_to_bed_ratio+bed_tot_category + pct_occupancy+occ_bedroom_ratio, data = residents_overview)
+#  summary(cph_conf)
 # cox.zph(cph_conf)
 # survfit(Surv(time = start_int, time2 = stop_int +1, event = confirmed)~factor(gender), data = residents_overview) %>% ggsurvplot(ylim=c(.85,1), conf.int = T, legend = "right")
 explanatory = c("gender", "ageg", "home_type", "user_type2", "region_UK" ,  
@@ -1037,6 +1007,7 @@ knitr::kable(CPH_confirmed,
 ```
 
 
+
 ## Factors associated with all-cause mortality
 
 The crude risk of all-cause death for the entire population of study was 19·5% (`r table_nums("tab_resident_descriptives", display = "cite")`). The all-cause confirmed case fatality rate was `r tbrounding(desc_residents$DAT_CFR)`% [`r tbrounding(desc_residents$DAT_CFR_lower)`%; `r tbrounding(desc_residents$DAT_CFR_upper)`%] based on incident reports. This is to be contrasted with a mortality of `r tbrounding(desc_residents$DAT_BFR)`% [`r tbrounding(desc_residents$DAT_BFR_lower)`%; `r tbrounding(desc_residents$DAT_BFR_upper)`%] in residents that did not test or did not test positive (RR = `r tbrounding(desc_residents$DAT_CFR_RR)` [`r tbrounding(exp(log(desc_residents$DAT_CFR_RR) - 1.96 * desc_residents$DAT_CFR_RR_SE)) `; `r tbrounding(exp(log(desc_residents$DAT_CFR_RR) + 1.96 * desc_residents$DAT_CFR_RR_SE))`]).
@@ -1049,18 +1020,18 @@ The time-dependent Cox proportional hazard models in `r table_nums("tab_CoxPH_de
 ```{r risk_death, results="asis"}
 # cph_death2 <- coxph(Surv(date1, date2, death_status) ~
 #                       gender+ ageg +
-#                       staff_to_bed_ratio + bed_tot_category +(region_UK)+ 
-#                       home_type*covid_status+ cluster(resident_id), data = residents_episodes)
+#                       staff_to_bed_ratio + bed_tot_category +(region_UK)+
+#                       pct_occupancy + occ_bedroom_ratio + cluster(resident_id), data = residents_episodes)
 # summary(cph_death2)
 # cox.zph(cph_death2)
 # survfit(Surv(time = date1, time2 = date2, event = death_status)~ gender, data = residents_episodes)
-# 
-explanatory = c("gender", "ageg", "user_type2", "home_type",
-                "staff_to_bed_ratio", "bed_tot_category", 
+#  pct_occupancy, occ_bedroom_ratio,no_bedroom 
+explanatory = c("gender", "ageg", "home_type", #"user_type2", 
+                "staff_to_bed_ratio", "bed_tot_category", "pct_occupancy", # "occ_bedroom_ratio",
                 "covid_status", "region_UK", "cluster(resident_id)")
-explanatory_interaction = c("gender", "ageg", "user_type2",
-                "staff_to_bed_ratio", "bed_tot_category", 
-                "covid_status:home_type", "region_UK", "cluster(resident_id)")
+# explanatory_interaction = c("gender", "ageg", "user_type2",
+#                 "staff_to_bed_ratio", "bed_tot_category", 
+#                 "covid_status:home_type", "region_UK", "cluster(resident_id)")
 dependent = "Surv(time = date1, time2 = date2, event = death_status)"
 CPH_death <-  finalfit(residents_episodes, dependent, explanatory, 
                        column = T, add_dependent_label = F)  
@@ -1090,9 +1061,6 @@ ggsurvplot(KM_mortality_by_covid_status, conf.int = TRUE,
 *Note*: The SARS-COV-2 classification is time-dependent and applies from the date of incident recorded on the relevant Datix incident report.  
 
 `r fig_nums("fig_KM_mortality")`
-
-
-
 
 
 # Interpretation
@@ -1125,7 +1093,7 @@ This study was approved by the University College London Research Ethics Committ
 
 ## Supplementary material 1: Quality and methodology report
 
-## Supplementary material 2: Incidence of confirmed and symptomatic cases among private residents according to Datix incident reports.
+## Supplementary material 2: Incidence of confirmed and symptomatic cases among private residents according to Datix incident reports
 
 Datix incidents reports recorded that `r formatbm(desc_residents$unique_residents_tested)` private residents were tested at least once. Test results were known for `r formatbm(desc_residents$unique_residents_test_result)` of them (`r tbrounding(desc_residents$unique_residents_test_result/desc_residents$unique_residents_tested*100)`%), including `r formatbm(desc_residents$unique_residents_test_result_positive)` residents with a positive test result. This data should be treated as representative, as tests coming back negative were not commonly recorded on Datix. Incidence proportions and rates reported in `r  table_nums("supp_epi_DAT", display = "cite")` are lower than corresponding estimates based on outbreak counts. This is thought to be caused by a combination of underascertainment as well as linkage error.
 
@@ -1140,7 +1108,6 @@ Datix incidents reports recorded that `r formatbm(desc_residents$unique_resident
 |	Incidence rate (per 100,000) | `r tbrounding(desc_residents$DAT_IR_symptomatic)` [`r tbrounding(desc_residents$DAT_IR_symptomatic_lower)`; `r tbrounding(desc_residents$DAT_IR_symptomatic_upper)`] | `r tbrounding(desc_residents$DAT_IR_confirmed)`  [`r tbrounding(desc_residents$DAT_IR_confirmed_lower)`; `r tbrounding(desc_residents$DAT_IR_confirmed_upper)`] | `r tbrounding(desc_residents$DAT_IR_death)` [`r tbrounding(desc_residents$DAT_IR_death_lower)`; `r tbrounding(desc_residents$DAT_IR_death_upper)` ]|
 
 ## Supplementary material 3: Additional tables
-
 
 
 `r table_nums("tab_zero_cases")`
