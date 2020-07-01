@@ -36,7 +36,8 @@ Imports:
     usethis,
     survival,
     survminer,
-    epitools
+    epitools,
+    sf
 RoxygenNote: 7.0.2
 Suggests: 
     testthat (>= 2.1.0),
