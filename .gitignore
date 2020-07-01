@@ -1,7 +1,9 @@
-_site
-.sass-cache
-.jekyll-cache
-.jekyll-metadata
-vendor
 .Rproj.user
-.idea
+.Rhistory
+.RData
+.Ruserdata
+.Rprofile
+inst/doc
+doc
+Meta
+ignore
