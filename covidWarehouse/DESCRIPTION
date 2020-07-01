@@ -1,5 +1,5 @@
-Package: covidFSHC
-Title: Reporting on COVID-19 infections across Four Season's Health Care 
+Package: catch19
+Title: Reporting on COVID-19 infections across care homes in the Four Seasons Health Care Group 
 Version: 0.0.0.9000
 Authors@R: c(
     person(given = "Peter",
@@ -13,7 +13,7 @@ Authors@R: c(
            email = "l.shallcross@ucl.ac.uk",
            comment = c(ORCID = "0000-0003-1713-2555")),
     person("University College London", role = c("cph")))
-Description: What the package does (one paragraph).
+Description: Contains all computer code used to process and analyse individual- and home-level data from the Four Seasons Health Care Group 
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true

@@ -134,15 +134,23 @@ occupancy_interpolated <- resident_days_linear_approx() #%>%
   # select(-occup360)
 
 home_mean_occupancy <- occupancy_interpolated  %>% 
-  filter(between(date, date_min_tallies, date_max_tallies)) %>% 
+  filter(between(date, as.Date("2020-01-01"), as.Date("2020-03-14"))) %>%
   group_by(home_code) %>% 
-  summarise(mean_occupancy = mean(occupancy, na.rm = T))
+  summarise(mean_occupancy = mean(occupancy, na.rm = T))  
 
 reference_homes <- reference_homes %>% 
   left_join(home_mean_occupancy) %>% 
   mutate(pct_occupancy = mean_occupancy/beds,
          occ_bedroom_ratio = mean_occupancy/no_bedrooms)
 
+
+reference_homes <- reference_homes %>% 
+  mutate(occ_bedroom_ratio_g5 = cut(occ_bedroom_ratio, seq(0.2, 1.2, .2)),
+         occ_bedroom_ratio_g6 = cut(occ_bedroom_ratio, seq(0.25, 1.2, .15)),
+         region_UK = as.factor(region_UK)) %>% 
+  mutate(occ_bedroom_ratio_g6 = relevel(occ_bedroom_ratio_g6, '(0·7,0·85]'),
+         occ_bedroom_ratio_g5 = relevel(occ_bedroom_ratio_g5, '(0·8,1]'),
+         region_UK <- relevel(region_UK, "Scotland")) 
 
 residents_episodes <- tline %>% 
   filter(rday==1) %>% 
@@ -174,7 +182,8 @@ residents_episodes <- tline %>%
          ageg = cut_age_denary(compute_age(dob, date_min), age.min = 75, age.max = 95))   %>% 
   left_join(select(reference_homes, home_code, country, region_UK,
                    staff_to_bed_ratio, carer_to_bed_ratio, bed_tot_category, 
-                   beds, pct_occupancy, occ_bedroom_ratio, no_bedrooms)) %>% 
+                   beds, pct_occupancy, no_bedrooms, 
+                   occ_bedroom_ratio, occ_bedroom_ratio_g5, occ_bedroom_ratio_g6)) %>% 
   group_by(resident_id) %>% 
   mutate(death_status = if_else(
     date1 == max(date1),
@@ -210,7 +219,8 @@ residents_overview <- tline %>%
                                           "Asymptomatic confirmed", "Symptomatic confirmed"))) %>% 
   left_join(select(reference_homes, home_code, country, region_UK,
                    staff_to_bed_ratio, carer_to_bed_ratio, bed_tot_category,
-                   beds,  pct_occupancy, occ_bedroom_ratio, no_bedrooms)) %>% 
+                   beds,  pct_occupancy, no_bedrooms, 
+                   occ_bedroom_ratio, occ_bedroom_ratio_g5, occ_bedroom_ratio_g6)) %>% 
   left_join(distinct(select(incidents, resident_id, starts_with("covid_first"))))
  
 
@@ -250,7 +260,8 @@ desc_national <- tibble(
 
 home_total_confirmed <- distinct(reference_homes, home_code, home_name_clickview, 
                                  country, region_UK, staff_to_bed_ratio, carer_to_bed_ratio, 
-                                 bed_tot_category, beds, pct_occupancy, no_bedrooms, occ_bedroom_ratio,
+                                 bed_tot_category, beds, pct_occupancy, no_bedrooms, 
+                                 occ_bedroom_ratio, occ_bedroom_ratio_g5, occ_bedroom_ratio_g6,
                                  younger_person, residential_general, residential_dementia,
                                  nursing_general,nursing_dementia) %>% 
   left_join(res_counts, by = "home_code") %>% 
@@ -291,12 +302,12 @@ residents_ct <- tibble(date = seq(date_min, date_max_tallies, 1)) %>%
   left_join(occupancy_interpolated) %>% 
   arrange(home_code, date) %>% 
   group_by(home_code) %>% 
-  mutate(new_symptomatic = tidyr::replace_na(new_symptomatic_home, 0) +
-                                    tidyr::replace_na(new_symptomatic_hospital, 0),
-         new_confirmed = tidyr::replace_na(new_confirmed_home, 0) +
-                                    tidyr::replace_na(new_confirmed_hospital, 0),
-         new_deaths = tidyr::replace_na(new_deaths_home, 0) +
-                                    tidyr::replace_na(new_deaths_hospital, 0)) %>% 
+  mutate(new_symptomatic = tidyr::replace_na(new_symptomatic_home, 0) + 
+           tidyr::replace_na(new_symptomatic_hospital, 0),
+         new_confirmed = tidyr::replace_na(new_confirmed_home, 0) + 
+           tidyr::replace_na(new_confirmed_hospital, 0),
+         new_deaths = tidyr::replace_na(new_deaths_home, 0) # +                                    tidyr::replace_na(new_deaths_hospital, 0)
+         ) %>% 
   mutate(I_symptomatic = total_cases_in_home(occupancy, new_symptomatic, date),
          I_confirmed = total_cases_in_home(occupancy, new_confirmed, date)) %>% 
   ungroup()
@@ -978,13 +989,14 @@ home_total_confirmed$outbreak <-  as.factor(home_total_confirmed$CT_confirmed>0)
 #              row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
 #  
 # ggplot(home_total_confirmed, aes(occ_bedroom_ratio, pct_occupancy, colour = outbreak)) +
-#   geom_point()
+#   geom_point() +
+#   ggsci::scale_color_lancet() +
+#   xlab("Ratio mean occupancy:number bedroom") + ylab("Ratio mean occupancy:beds")
 ```
  
 
 ## Factors associated with confirmed infections
 
- 
 Using the individual-level data on private bed residents (`r table_nums("tab_resident_descriptives", display = "cite")`), factors affecting the rate of confirmed cases were investigated in a Cox Proportional Hazard model (`r table_nums("tab_CoxPH_confirmed", display = "cite")`). According to this, and other than geographical location, the staff-to-bed ratio was the only factor significantly associated with the rate of confirmed cases. An increase by 10 percentage point in the staff headcount relative to the total bed count was associated with a 13% reduction [9%; 18%] in the rate of confirmed cases.
 
 
@@ -995,8 +1007,8 @@ Using the individual-level data on private bed residents (`r table_nums("tab_res
 #  summary(cph_conf)
 # cox.zph(cph_conf)
 # survfit(Surv(time = start_int, time2 = stop_int +1, event = confirmed)~factor(gender), data = residents_overview) %>% ggsurvplot(ylim=c(.85,1), conf.int = T, legend = "right")
-explanatory = c("gender", "ageg", "home_type", "user_type2", "region_UK" ,  
-                "staff_to_bed_ratio", "bed_tot_category", "pct_occupancy")
+explanatory = c("gender", "ageg", "home_type", "user_type2",  
+                "staff_to_bed_ratio", "bed_tot_category", "occ_bedroom_ratio_g6", "region_UK" )
 dependent = "Surv(time = start_int, time2 = stop_int +1, event = confirmed)"
 CPH_confirmed <-  finalfit(residents_overview,
                            dependent, 
@@ -1019,7 +1031,7 @@ The time-dependent Cox proportional hazard models in `r table_nums("tab_CoxPH_de
 
 ```{r risk_death, results="asis"}
 # cph_death2 <- coxph(Surv(date1, date2, death_status) ~
-#                       gender+ ageg +
+#                       gender+ ageg +covid_status+
 #                       staff_to_bed_ratio + bed_tot_category +(region_UK)+
 #                       pct_occupancy + occ_bedroom_ratio + cluster(resident_id), data = residents_episodes)
 # summary(cph_death2)
@@ -1027,7 +1039,7 @@ The time-dependent Cox proportional hazard models in `r table_nums("tab_CoxPH_de
 # survfit(Surv(time = date1, time2 = date2, event = death_status)~ gender, data = residents_episodes)
 #  pct_occupancy, occ_bedroom_ratio,no_bedroom 
 explanatory = c("gender", "ageg", "home_type", #"user_type2", 
-                "staff_to_bed_ratio", "bed_tot_category", "pct_occupancy", # "occ_bedroom_ratio",
+                "staff_to_bed_ratio", "bed_tot_category", "occ_bedroom_ratio_g6",
                 "covid_status", "region_UK", "cluster(resident_id)")
 # explanatory_interaction = c("gender", "ageg", "user_type2",
 #                 "staff_to_bed_ratio", "bed_tot_category", 

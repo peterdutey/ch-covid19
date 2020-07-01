@@ -1,61 +1,6 @@
 
 
 
-
-get_db_conn <- function() {
-  getOption("fshc_warehouse")
-}
-
-#' Create or overwrite the \code{reference_homes} table
-#'
-#' @param conn a database connection
-#' @param overwrite whether to overwrite the table (default is TRUE)
-#' @return the name of the table if data was successfully loaded
-#' @importFrom dplyr tbl
-#' @export
-create_table_reference_homes <- function(homes = reference_homes,
-                                         conn = get_db_conn(), overwrite = TRUE){
-
-  dbplyr::db_copy_to(con = conn,
-                     table = "reference_homes",
-                     values = homes,
-                     overwrite = overwrite,
-                     temporary = FALSE,
-                     indexes = list(
-                       "home_code",
-                       "postcode"
-                     ))
-
-}
-
-
-#' Create or overwrite \code{reference_geography} table
-#'
-#' @param conn a database connection
-#' @param data a data frame, set to  `reference_geography` by default.
-#' @param overwrite whether to overwrite the `reference_geography` table.
-#' Default is `TRUE`.
-#' @importFrom magrittr %>%
-#' @importFrom dplyr group_by summarise select filter
-#' @return
-#' @export
-#' @importFrom dplyr tbl
-create_table_reference_geography <- function(conn = get_db_conn(),
-                                       data = reference_geography,
-                                       overwrite = TRUE){
-
-  dbplyr::db_copy_to(con = conn,
-                     table = "reference_geography",
-                     values = data,
-                     overwrite = overwrite,
-                     temporary = FALSE,
-                     indexes = list(
-                       "postcode"
-                     ))
-
-}
-
-
 check_homes <- function(home_codes, call = NULL) {
 
   if(!file.exists(file.path(getOption("fshc_files"), "reference_homes.rda"))) {

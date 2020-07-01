@@ -20,6 +20,7 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
+options(OutDec = ".")
 
 library(summarytools)
 st_options(
@@ -32,6 +33,7 @@ library(ggplot2)
 load_data()
 date_min <- as.Date("2020-03-02")
 date_max <- as.Date("2020-06-07") #as.Date("2020-06-15")
+date_min_tallies <- as.Date("2020-03-24")
 date_max_tallies = as.Date("2020-06-07")
 
 
@@ -160,10 +162,10 @@ approx_occupancy <- tline %>%
 occ_home <- merge(
   approx_occupancy,
   #remove Warmley House Nursing which has no occupancy report
-  na.omit(select(filter(occupancy, home_code != "360"), 
+  na.omit(select(occupancy, #filter(occupancy, home_code != "360"),
                  home_code, week_ending, occupancy)),
   all = FALSE
-) 
+)
 
 bed2020 <- dplyr::filter(beds, year == "2020") %>% 
   dplyr::select(-year) %>% 
@@ -182,7 +184,9 @@ occ_home <- merge(
     contract_beds/beds >= .1 ~ ">=10% contract beds",
     TRUE ~ "<10% contract beds"
   )) %>% 
-  dplyr::left_join(select(reference_homes, home_code, country))
+  dplyr::left_join(select(reference_homes, home_code, country)) %>% 
+ dplyr::filter(between(week_ending, date_min_tallies, date_max_tallies))  
+
 
 
 ratio_occupant_estimates <- (sum(occ_home$occupancy)/sum(occ_home$approx_occupancy))
@@ -228,7 +232,7 @@ Plots below compare both measures for every Sunday (Figure 1) and in total acros
 
 This enabled us to estimate exposure (resident-days) excluding local authority contract beds, since no Datix incident reports were returned for occupants of such beds. 
 
-In addition, this validation enabled us to approximate the total number of unique residents (including contract beds) during the period of observation. The ratio of occupants recorded by FSHCG to the number approximated by us was `r tbrounding(ratio_occupant_estimates, 3) `. The number of unique residents in non-contract beds was `r formatbm(length(unique(tline$resident_id[tline$rday ==1])))` during the study period. By assuming that the resident turnover in local authority beds was the same as the rate in other beds, we infer the number of unique residents inclusive of contract beds to be `r formatbm(round(length(unique((tline$resident_id[tline$rday ==1])))*ratio_occupant_estimates+.5))`.
+In addition, this validation enabled us to approximate the total number of unique residents (including contract beds) during the period of observation for aggregate count data (`r date_min_tallies` -- `r date_max_tallies`). The ratio of occupants recorded by FSHCG to the number approximated by us was `r ratio_occupant_estimates `. The number of unique residents in non-contract beds was `r formatbm(length(unique(tline$resident_id[tline$rday ==1])))` during the study period. By assuming that the resident turnover in local authority beds was the same as the rate in other beds, we infer the number of unique residents inclusive of contract beds to be `r formatbm(round(length(unique((tline$resident_id[tline$rday ==1])))*ratio_occupant_estimates+.5))`.
 
 In England, this ratio was `r ratio_occupant_estimates_england`, and for outbreak homes across the UK, `r ratio_occupant_estimates_outbreak_only`
 
@@ -280,6 +284,7 @@ merge(dplyr::select(reference_homes, home_code, home_name_datix),
 
 ```{r case_validation, message=F}
 residents_overview <- tline %>% 
+  dplyr::filter(between(date, date_min_tallies, date_max_tallies)) %>% 
   dplyr::filter(rday==1) %>%
   dplyr::group_by(resident_id, home_code) %>% 
   dplyr::summarise(resident_days = sum(rday),
@@ -322,7 +327,7 @@ ch_data_all <- merge(datix_counts, tally_counts, all = T) %>%
 
 
  
-During the study period, manager counted `r sum(ch_data_all$tally_confirmed)` confirmed infection while Datix recorded `r sum(ch_data_all$datix_confirmed)` such infections. The `r round(sum(ch_data_all$tally_confirmed)/sum(ch_data_all$datix_confirmed)*100-100 )`% excess could be due to a range of explanations:
+During the period, manager counted `r sum(ch_data_all$tally_confirmed)` confirmed infection while Datix recorded `r sum(ch_data_all$datix_confirmed)` such infections. The `r round(sum(ch_data_all$tally_confirmed)/sum(ch_data_all$datix_confirmed)*100-100 )`% excess could be due to a range of explanations:
 
 1. contract beds occupants, who may represent at least `r tbrounding((1-1/ratio_occupant_estimates)*100)`% of residents (assuming that their turnover is identical to that of occupants of other beds, in reality turnover is likely to be higher, and so is this proportion), may have a higher infection rate than other residents 
 2. underreporting on Datix
