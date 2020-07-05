@@ -186,7 +186,7 @@ km_ct_estimator <- function(df, t, d, pop, subtract_cases = TRUE, overwrite = TR
 
 
 relative_risk <- function(a, b, c, d) {
-  (a/b)/(c/d)
+  (a/(a + b))/(c/(c + d))
 }
 
 relative_risk_SE <- function(a, b, c, d){
