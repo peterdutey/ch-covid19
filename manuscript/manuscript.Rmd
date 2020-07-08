@@ -4,13 +4,13 @@ title: "Covid-19 infection and attributable mortality in residents of UK care ho
 bibliography: references.bib
 csl: elsevier-vancouver.csl
 output:
-  word_document:
-    toc: yes
-    reference_docx: template.docx
   html_document:
     df_print: paged
     toc: yes
     code_folding: hide
+  word_document:
+    toc: yes
+    reference_docx: template.docx
 link-citations: yes
 always_allow_html: yes
 ---
@@ -950,7 +950,7 @@ FSHCG collects administrative data on their private residents through a variety 
 # dev.off()
 ```
 
-```{r, fig.width=10, fig.height=5}
+```{r study_diagram, fig.width=10, fig.height=5}
 knitr::include_graphics("study_diagram.svg")
 ```
 
@@ -989,14 +989,11 @@ Incidence proportions and rates were calculated using the aggregate outbreak cou
 
 Individual-level data (including dates of care home entry and exit) were available for private residents only. By assuming infection underreporting to affect residents conditionally at random, it was possible to use the data to study factors associated with the rate of infection and mortality. A Cox proportional hazards model was used to test the effect of both individual-level risk factors (sex, age, care type) and organisation-level risk factors (region, care home size, staff-to-bed ratio, occupant-to-bedroom ratio).
 
-). We also compared care ratesDates of infectiondischarge were used alongside the death indicator to estimate the case-fatality rate in home and hospital, as well as compare all-cause mortality in care homes withbased on the presence of symptoms and without outbreaks, defined as at least one /or confirmed case or Covid-19 related death during the study period. infection. A time-dependent Cox proportional hazards model analysed the effect of the same factors on all-cause mortality based on the time-dependent infection classification (susceptible; symptomatic not confirmed; asymptomatic confirmed; symptomatic confirmed). We also compared rates of infection and mortality in care homes with and without outbreaks, defined as at least one confirmed infection or Covid-19 related death during the study period. A time-dependent Cox proportional hazards model analysed the effect of the same factors on all-cause mortality based on the time-dependent infection classification (uninfected; symptomatic not confirmed; asymptomatic confirmed; symptomatic confirmed) as well as the time-dependent home outbreak status (no Covid-related death or confirmed infection; at least one Covid-related death or confirmed infection). The associated hazard ratios enable us to compare the mortality in each group as compared to the reference category (uninfected in non-outbreak care homes). Interpretation is facilitated by computing the associated attributable risk $ AR = (HR - 1)/HR$, which  
+). We also compared care ratesDates of infectiondischarge were used alongside the death indicator to estimate the case-fatality rate in home and hospital, as well as compare all-cause mortality in care homes withbased on the presence of symptoms and without outbreaks, defined as at least one /or confirmed case or Covid-19 related death during the study period. infection. A time-dependent Cox proportional hazards model analysed the effect of the same factors on all-cause mortality based on the time-dependent infection classification (susceptible; symptomatic not confirmed; asymptomatic confirmed; symptomatic confirmed). We also compared rates of infection and mortality in care homes with and without outbreaks, defined as at least one confirmed infection or Covid-19 related death during the study period. A time-dependent Cox proportional hazards model analysed the effect of the same factors on all-cause mortality based on the time-dependent infection classification (uninfected; symptomatic not confirmed; asymptomatic confirmed; symptomatic confirmed) as well as the time-dependent home outbreak status (no Covid-related death or confirmed infection; at least one Covid-related death or confirmed infection). The associated hazard ratios enable us to compare the mortality in each group as compared to the reference category (uninfected in non-outbreak care homes). The corresponding attributable fraction is obtained by using the model to predict the counterfactual mortality, then computing AFW, the attributable fraction within study:[@Samuelsen2008]
 
-https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5259851/pdf/12874_2016_Article_285.pdf
+$$ AFW = \dfrac{\sum_{i=1}^{n}(\hat{F}_i - \hat{F}_i^\star)}{\sum_{i=1}^{n}\hat{F}_i} $$
 
-TO DOOOOO
-
-
-
+where $\hat{F}_i$ designates the predicted probability of death of individual $i = \{1, \dots, n\}$ based on the observed infection/outbreak classification, and  $\hat{F}_i^\star$ the same probability had the individual been uninfected and living in a non-outbreak care home. Observed censoring times are used.
 
 Bedroom occupancy and staffing ratios were estimated on the basis of baseline occupancy averaged before the first cases (between 1 January and 1 March 2020), so as to rule out reverse causality. Dates of discharge were used alongside the death indicator to estimate the case-fatality rate in home and hospital, as well as compare all-cause mortality based on the presence of symptoms and/or confirmed infection. Confirmed infection data in both sources can only be treated as underestimates of the true incidence, due to the gradual increase in nasopharyngeal swab (PCR) testing across the study period following the introduction of whole care home testing on 11 May 2020.[@dhscTesting2020]. By 22 June 2020, 90% of FSHCG care homes had participated in the whole home testing programme.
 
@@ -1029,7 +1026,7 @@ In England only, `r england_results$FSHC_confirmed` infections were confirmed of
 |	Incidence rate (per 100,000 person-days) | `r tbrounding(desc_residents$CT_IR_symptomatic)` [`r tbrounding(desc_residents$CT_IR_symptomatic_lower)`; `r tbrounding(desc_residents$CT_IR_symptomatic_upper)`] |`r tbrounding(desc_residents$CT_IR_confirmed)` [`r tbrounding(desc_residents$CT_IR_confirmed_lower)`; `r tbrounding(desc_residents$CT_IR_confirmed_upper)`] | `r tbrounding(desc_residents$CT_IR_cdeath)` [`r tbrounding(desc_residents$CT_IR_cdeath_lower)`; `r tbrounding(desc_residents$CT_IR_cdeath_upper)`] | `r tbrounding(desc_residents_outbreak_only$CT_IR_symptomatic)` [`r tbrounding(desc_residents_outbreak_only$CT_IR_symptomatic_lower)`; `r tbrounding(desc_residents_outbreak_only$CT_IR_symptomatic_upper)`] |`r tbrounding(desc_residents_outbreak_only$CT_IR_confirmed)` [`r tbrounding(desc_residents_outbreak_only$CT_IR_confirmed_lower)`; `r tbrounding(desc_residents_outbreak_only$CT_IR_confirmed_upper)`] |`r tbrounding(desc_residents_outbreak_only$CT_IR_cdeath)` [`r tbrounding(desc_residents_outbreak_only$CT_IR_cdeath_lower)`; `r tbrounding(desc_residents_outbreak_only$CT_IR_cdeath_upper)`] |
 
 
-```{r fig_KM_CT_plots, fig.height = 4.5, fig.width = 14, message=FALSE}
+```{r fig_KM_CT_plots, fig.height = 4, fig.width = 12, message=FALSE}
 write.csv(km_ct_residents_symp, file = "supp_table_kaplan_meier_residents_symptomatic.csv", row.names = F)
 write.csv(km_ct_residents_confirmed, file = "supp_table_kaplan_meier_residents_confirmed.csv", row.names = F)
 write.csv(km_ct_residents_deaths, file = "supp_table_kaplan_meier_residents_deaths.csv", row.names = F)
@@ -1052,9 +1049,13 @@ km_residents_graph <- ggplot(aes(x = date, y = 1-S_t,
            ymax = 1 - St_max,
            ymin = 1 - St_min,
            color = Event), data = all_km_residents) +
-  # facet_grid(region_group ~ .) +
   geom_ribbon(alpha=0.1, linetype = 2 ) +
   geom_path(lwd=1.2) +
+  geom_text(aes(label = if_else(
+    date == get_monday_date(date),
+    formatbm(round((1-S_t) * desc_residents$CT_total_residents)),
+    ""
+  )), position = position_nudge(y = .02)) +
   scale_y_continuous("Cumulative incidence",
                      breaks = seq(0,1,.02)) +
   ggsci::scale_color_lancet() +
@@ -1086,9 +1087,13 @@ km_staff_graph <- ggplot(aes(x = date, y = 1-S_t,
            ymax = 1 - St_max,
            ymin = 1 - St_min,
            color = Event), data = all_km_staff) +
-  # facet_grid(region_group ~ .) +
   geom_ribbon(alpha=0.1, linetype = 2,stat = ) +
   geom_path(lwd=1.2) +
+  geom_text(aes(label = if_else(
+    date == get_monday_date(date),
+    formatbm(round((1-S_t) * desc_staff$total_staff)),
+    ""
+  )), position = position_nudge(y = .02)) +
   ggsci::scale_color_lancet()+
   scale_y_continuous("Cumulative incidence",
                      breaks = seq(0,1,.02)) +
@@ -1099,15 +1104,17 @@ km_staff_graph <- ggplot(aes(x = date, y = 1-S_t,
                  "%e %b %Y"
                )) +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 25, vjust = 1, hjust=1)) +
+  theme(legend.position = "none", 
+        axis.text.x = element_text(angle = 25, vjust = 1, hjust=1)) +
   coord_cartesian(ylim = c(0,0.27)) +  ggtitle("(B) Staff")
 
 km_ct_plots <- ggpubr::ggarrange(
   km_residents_graph,
-  km_staff_graph
+  km_staff_graph,
+  widths = c(1.4, 1)
 )
 
-pdf("figure2.pdf", 14,4)
+pdf("figure2.pdf", 12,4)
 km_ct_plots
 dev.off()
 km_ct_plots
@@ -1211,7 +1218,7 @@ To investigate whether increased mortality was only seen in individuals who were
 ```{r tab_CFR_age_sex, results="asis"}
 residents_overview %>%
   mutate(Age = ageg, Sex = gender) %>% 
-  group_by(Age, Sex) %>% 
+  group_by(Sex, Age) %>% 
   summarise(
     n = n_distinct(resident_id),
     resident_days = sum(resident_days),
@@ -1234,12 +1241,12 @@ residents_overview %>%
     `Confirmed infections` = confirmed_infections,
     `Total deaths` = deaths,
     `Deaths in confirmed infections` = deaths_confirmed,
-    `Case-fatality rate (%)` = paste0(cfr, " [", cfr_lower, "; ", cfr_upper, "]"),
-    `Relative risk` = paste0(
-      tbrounding(RR, 2), " [",
-      tbrounding(exp(log(RR) - 1.96 * RR_SE), 2), "; ",
-      tbrounding(exp(log(RR) + 1.96 * RR_SE), 2), "]"
-    )
+    `Case-fatality rate (%)` = paste0(cfr, " [", cfr_lower, "; ", cfr_upper, "]")
+    # `Relative risk` = paste0(
+    #   tbrounding(RR, 2), " [",
+    #   tbrounding(exp(log(RR) - 1.96 * RR_SE), 2), "; ",
+    #   tbrounding(exp(log(RR) + 1.96 * RR_SE), 2), "]"
+    # )
   ) %>% kable(align=c("l", "l", "r", "r", "r", "r", "r", "r"))
 ```
 
@@ -1253,11 +1260,12 @@ Higher staff to resident ratios were associated with lower risk of infection: a 
 
 `r table_nums("tab_CoxPH_confirmed")`
 
-```{r CPH_confirmed,   results="asis"}
+```{r hazard_ratios_confirmed,   results="asis"}
 # cph_conf <- coxph(Surv(time = start_int, time2 = stop_int +1, event = confirmed) ~ gender + ageg+home_type+user_type2+  staff_to_bed_ratio+bed_tot_category  +occ_bedroom_ratio_g6, data = residents_overview)
 #  summary(cph_conf)
 # cox.zph(cph_conf)
 # survfit(Surv(time = start_int, time2 = stop_int +1, event = confirmed)~factor(gender), data = residents_overview) %>% ggsurvplot(ylim=c(.85,1), conf.int = T, legend = "right")
+
 explanatory = c("gender", "ageg", "home_type", "user_type2",  
                 "staff_to_bed_ratio", "bed_tot_category", "occ_bedroom_ratio_g6"  )
 dependent = "Surv(time = start_int, time2 = stop_int +1, event = confirmed)"
@@ -1282,8 +1290,6 @@ It is important to note these hazard ratio estimates do not give a comprehensive
 After adjusting for other variables, an increase by 10 percentage points in staffing was associated with a 3·1% reduction [0·6%; 5·7%] in mortality after adjustment for other  variables.
 
 ```{r residents_daily}
-
-
 residents_daily <- tline %>% 
   filter(rday==1)  %>% 
   left_join(home_first_case) %>%
@@ -1316,31 +1322,12 @@ residents_daily <- bind_cols(
   as_tibble(model.matrix(~covid_status_outbreak_digit, residents_daily)[,-1])
 )
 
-# residents_daily <- residents_daily %>% 
-#   group_by(date) %>% 
-#   summarise(n = sum(rday),
-#             d = sum(death),
-#             covid_status_outbreak_digit0 = 1 - 
-#               mean(covid_status_outbreak_digit1) -
-#               mean(covid_status_outbreak_digit2) -
-#               mean(covid_status_outbreak_digit3) -
-#               mean(covid_status_outbreak_digit4) -
-#               mean(covid_status_outbreak_digit5),
-#             covid_status_outbreak_digit1 = mean(covid_status_outbreak_digit1),
-#             covid_status_outbreak_digit2 = mean(covid_status_outbreak_digit2),
-#             covid_status_outbreak_digit3 = mean(covid_status_outbreak_digit3),
-#             covid_status_outbreak_digit4 = mean(covid_status_outbreak_digit4),
-#             covid_status_outbreak_digit5 = mean(covid_status_outbreak_digit5)) %>% 
-#   mutate(date_int = as.integer(date - date_min))
-
-
-  
 ```
 
 
 `r table_nums("tab_CoxPH_death")`
 
-```{r risk_death, results="asis"}
+```{r hazard_ratios_death, results="asis"}
 # cph_death2 <- coxph(Surv(date1, date2, death_status) ~
 #                       gender+ ageg + home_type + covid_status_outbreak +
 #                       staff_to_bed_ratio + bed_tot_category + occ_bedroom_ratio_g6 +
@@ -1388,168 +1375,77 @@ KM_mortality_plot
 `r table_nums("tab_attributable_deaths")`
 
 
-```{r, warning=F, results = "asis"}
-cph_death2 <- coxph(Surv(date1, date2, death_status) ~
-                      gender+ ageg + home_type + covid_status_outbreak +
-                      staff_to_bed_ratio + bed_tot_category + occ_bedroom_ratio_g6 +
-                      cluster(resident_id), data = residents_episodes_short)
-HRs_covid <- tibble::enframe(cph_death2$coefficients[grep("covid_status_outbreak", 
-                                                          names(cph_death2$coefficients))]) %>% 
-  transmute(covid_status_outbreak = gsub("covid_status_outbreak", "", name),
+
+```{r attributable_deaths, warning=F, message=F, results = "asis"}
+cph_death3 <- coxph(Surv(date1, date2, death_status) ~
+                    gender+ ageg + home_type + covid_status_outbreak_digit +
+                    staff_to_bed_ratio + bed_tot_category + occ_bedroom_ratio_g6 +
+                    cluster(resident_id),
+                    data =  residents_episodes_short)
+
+HRs_covid <- tibble::enframe(cph_death3$coefficients[grep("covid_status_outbreak", 
+                                                          names(cph_death3$coefficients))]) %>% 
+  transmute(covid_status_outbreak_digit = gsub("covid_status_outbreak_digit", "", name),
             HR = exp(value))
-HRs_CI_covid <- as_tibble(exp(confint(cph_death2))[grep("covid_status_outbreak", 
-                                                          names(cph_death2$coefficients)),]) %>% 
+HRs_CI_covid <- as_tibble(exp(confint(cph_death3))[grep("covid_status_outbreak", 
+                                                          names(cph_death3$coefficients)),]) %>% 
   rename(HR_lower =  `2·5 %`,
          HR_upper = `97·5 %`)
-HRs_CI_covid$covid_status_outbreak <- gsub(
-  "covid_status_outbreak", "",
-  grep("covid_status_outbreak", names(cph_death2$coefficients), value = T)
+HRs_CI_covid$covid_status_outbreak_digit <- gsub(
+  "covid_status_outbreak_digit", "",
+  grep("covid_status_outbreak", names(cph_death3$coefficients), value = T)
 ) 
 HRs_covid <- merge(HRs_covid, HRs_CI_covid)
-  
-attributable_deaths <- residents_episodes_short %>% 
-  filter(death_status == 1) %>% 
-  group_by(covid_status_outbreak) %>% 
-  summarise(Deaths = n()) %>% 
-    left_join(HRs_covid) %>% 
-    mutate(HR = tidyr::replace_na(HR, 1),
+
+attributable_deaths <- residents_episodes_short %>%
+  group_by(covid_status_outbreak_digit, covid_status_outbreak) %>%
+  summarise(
+    rdays = sum(as.integer(date2-date1)),
+    deaths = sum(death_status == 1)
+    ) %>% 
+  left_join(HRs_covid) %>% 
+  mutate(HR = tidyr::replace_na(HR, 1),
            HR_lower = tidyr::replace_na(HR_lower, 1),
-           HR_upper = tidyr::replace_na(HR_upper, 1)) %>% 
-    mutate(AH = (HR - 1)/HR,
-           AH_lower = (HR_lower - 1)/HR_lower,
-           AH_upper = (HR_upper - 1)/HR_upper) %>% 
-    mutate(`Attributable deaths` = AH * Deaths) %>% 
-    mutate(`AD (%)` = tbrounding(`Attributable deaths`/ sum(Deaths)*100)) %>% 
-  transmute(`Infection/outbreak status` = covid_status_outbreak,
-            Deaths,
-            HR = paste0(tbrounding(HR,2), " [",
+           HR_upper = tidyr::replace_na(HR_upper, 1))
+
+
+death_predictions <- 1-predict(cph_death3, residents_episodes_short, type = "survival")
+
+att_fractions <- 0
+for(i in 1:5) {
+  residents_episodes_short_counterfact <- mutate(
+    residents_episodes_short, 
+    # date2 = if_else(death_status == 1 & covid_status_outbreak_digit == as.character(i), 105, date2),
+    # death_status = if_else(death_status == 1 & 
+    #                          covid_status_outbreak_digit == as.character(i),
+    #                        0L, death_status),
+    covid_status_outbreak_digit = case_when(
+      covid_status_outbreak_digit == as.character(i) ~ factor("0", levels = 0:5),
+      TRUE ~ covid_status_outbreak_digit)
+  )
+  death_predictions_counterfactual <- 1 - predict(cph_death3, 
+                                                  residents_episodes_short_counterfact, 
+                                                  type = "survival")
+  att_fractions[i+1] <- sum(death_predictions - death_predictions_counterfactual) / sum(death_predictions)
+}
+
+rm(death_predictions, death_predictions_counterfactual)
+
+attributable_deaths$AF <- att_fractions
+attributable_deaths <- bind_rows(attributable_deaths, 
+                                 colSums(attributable_deaths[,c("rdays", "deaths", "AF")]))
+attributable_deaths %>% ungroup() %>% transmute(
+  `Infection/outbreak status` = tidyr::replace_na(as.character(covid_status_outbreak), "TOTAL"),
+  `Ajusted HR` = paste0(tbrounding(HR,2), " [",
                         tbrounding(HR_lower,2),"; ",
                         tbrounding(HR_upper,2), "]"),
-            `Attibutable hazard (%)`= paste0(tbrounding(AH*100,1), " [",
-                        tbrounding(AH_lower*100,1),"; ",
-                        tbrounding(AH_upper*100,1), "]"),
-           `Attributable deaths` = round(`Attributable deaths`),
-           `AD (%)`)
-attributable_deaths <- bind_rows(
-  attributable_deaths,
-  tibble(
-    `Infection/outbreak status` = "TOTAL",
-            Deaths = (sum(attributable_deaths$Deaths)),
-            HR = "",
-            `Attibutable hazard (%)`= "",
-           `Attributable deaths` = sum(attributable_deaths$`Attributable deaths`),
-           `AD (%)` = tbrounding(
-             sum(attributable_deaths$`Attributable deaths`)/sum(attributable_deaths$Deaths)*100)
-  )
-)
+  `Resident-days` = formatbm(rdays),
+  `Total deaths` = formatbm(deaths),
+  `Deaths attributable to Covid-19 (% all-cause deaths)` = paste0(
+    round(AF * 1330), " (",
+    tbrounding(AF*100, 2), ")")
+) %>% kable(align=c("l", rep("r", 4)))
 
-kable(attributable_deaths, align =c("l", "r", "r", "r", "r", "r", "r"))
-```
-
-
-
-
-```{r}
-
-# residents_episodes$resident_id_int <- as.numeric(as.factor(residents_episodes$resident_id))
-# cph_death2 <- coxph(Surv(date1, date2, death_status) ~
-#                       gender+ ageg + home_type + covid_status_outbreak_digit1 +
-#                       covid_status_outbreak_digit2 + covid_status_outbreak_digit3+
-#                       covid_status_outbreak_digit4 +covid_status_outbreak_digit5 +
-#                       staff_to_bed_ratio + bed_tot_category + occ_bedroom_ratio_g6 +
-#                       cluster(resident_id_int), data = data.frame(residents_episodes), 
-#                     ties = "breslow")
-# 
-# trucmuche <- survfit(Surv(date1, date2, death_status) ~
-#                       gender+ ageg + home_type + covid_status_outbreak_digit1 +
-#                       covid_status_outbreak_digit2 + covid_status_outbreak_digit3+
-#                       covid_status_outbreak_digit4 +covid_status_outbreak_digit5 +
-#                       staff_to_bed_ratio + bed_tot_category + occ_bedroom_ratio_g6,
-#                      residents_episodes_short, id = "resident_id")
-# 
-# AH_fractions <- residents_daily %>% 
-#   tidyr::pivot_longer(cols=starts_with("covid_status_outbreak_")) %>% 
-#   dplyr::rename(prevalence = value) %>% 
-#   left_join(tibble::enframe(cph_death2$coefficients[grep("covid_status_outbreak_digit", names(cph_death2$coefficients))])) %>% 
-#   mutate(AH = (prevalence * tidyr::replace_na(exp(value) - 1, 0)) / 
-#            (prevalence * tidyr::replace_na(exp(value) - 1, 0) +1))
-# 
-# 
-# AH_coefs <- tibble::enframe(cph_death2$coefficients[grep("covid_status_outbreak_digit",
-#                                                          names(cph_death2$coefficients))]) %>% 
-#   rename(covid_status_outbreak_digit = name) %>% 
-#   mutate(covid_status_outbreak_digit = gsub("covid_status_outbreak_digit", "", covid_status_outbreak_digit))
-#                               
-# AH_fractions <- residents_daily %>%
-#   group_by(date, covid_status_outbreak_digit) %>%
-#   summarise(n = sum(rday),
-#             d = sum(death)) %>% 
-#   left_join(AH_coefs)  %>% 
-#   filter(date >= as.Date("2020-04-01")) %>% 
-#   mutate(AH =  (tidyr::replace_na(exp(value), 1) -1 ) / tidyr::replace_na(exp(value), 1)) %>% 
-#   group_by(covid_status_outbreak_digit) %>% 
-#   summarise(AH = sum(AH*d),
-#             d = sum(d),
-#             n = sum(n))  
-#             
-# 
-# 
-#  
-# 
-# ggplot(AH_fractions)+
-#   geom_line(aes(x = date, y = AH*d, color = name ))
-# 
-
-
-# 
-# # summary(cph_death2)
-# AF_estimates <- list()
-# for(i in 1:5) {
-#   AF_estimates[[levels(residents_episodes$covid_status_outbreak)[i]]] <- 
-#     AF::AFcoxph(object = cph_death2, data = data.frame(residents_episodes), 
-#             exposure = paste0("covid_status_outbreak_digit", i), clusterid = "resident_id_int")
-#   AF_estimates[[i]]$se <- sqrt(AF_estimates[[i]]$AF.var)
-#   AF_estimates[[i]]$confidence.interval <- AF:::CI.AF(
-#     AF = AF_estimates[[i]]$AF.est, 
-#     Std.Error = AF_estimates[[i]]$se, 
-#     confidence.level = 0.95, CI.transform = "log")
-#   colnames(AF_estimates[[i]]$confidence.interval) <- c("Lower limit", "Upper limit")
-#   AF_estimates[[i]]$covid_status_outbreak <- levels(
-#     residents_episodes$covid_status_outbreak)[i+1]
-#   AF_estimates[[i]] <- bind_cols(
-#     as_tibble(
-#       AF_estimates[[i]][c('times', 'covid_status_outbreak', 'AF.est', 'AF.var', 
-#                          'S.est', 'S0.est', 'S.var', 'S0.var')]
-#     ),
-#     as_tibble(AF_estimates[[i]]$confidence.interval)
-#   )
-# }
-# 
-# 
-# ggplot(bind_rows(AF_estimates[2:5]),
-#        aes(x = times,  color =  covid_status_outbreak )) +
-#   geom_ribbon(aes(ymin = `Lower limit`*100, ymax = `Upper limit`*100), 
-#               alpha=0.05, linetype = 2) +
-#   geom_line(aes(y=AF.est*100), size = 1) +
-#   coord_cartesian(ylim=c(0, 30)) +
-#   ggsci::scale_color_lancet() +
-#   xlab("Excess mortality (%)") +
-#   ggtitle("% excess mortality compared with uninfected in non-outbreak homes")
-# 
-# # 
-# cph_death2 <- coxph(Surv(date1, date2, death_status) ~
-#                         covid_status_outbreak_digit  +
-#                       cluster(resident_id_int), data = residents_episodes, 
-#                     ties = "breslow")
-# cph_death2 <- flexsurv::flexsurvreg(Surv(date1, date2, death_status) ~
-#                         covid_status_outbreak_digit  +
-#                       cluster(resident_id), 
-#                       data = residents_episodes_short,dist = "weibull")
-# 
-# truc <- survfit(cph_death2, tibble(date1 = 30, covid_status_outbreak_digit = factor(1:5, levels = 1:5) )) 
-#   ggsurvplot(truc,
-#              data = tibble(date1 = 30, covid_status_outbreak_digit = factor(5, levels = 1:5) ))
-#     
 ```
 
 
