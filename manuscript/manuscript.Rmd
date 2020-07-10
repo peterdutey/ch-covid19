@@ -4,16 +4,26 @@ title: "Covid-19 infection and attributable mortality in residents of UK care ho
 bibliography: references.bib
 csl: elsevier-vancouver.csl
 output:
-  word_document:
-    toc: yes
-    reference_docx: template.docx
   html_document:
     df_print: paged
     toc: yes
     code_folding: hide
+  word_document:
+    toc: yes
+    reference_docx: template.docx
 link-citations: yes
 always_allow_html: yes
 ---
+
+Peter Dutey Magni,^{1} Haydn Williams,^{2} Arnoupe Jhass,^{1} Greta Rait, Harry Hemingway,^{134} Andrew Hayward,^{1} Laura Shallcross^{1}
+
+
+1 Institute of Health Informatics, University College London, London, UK
+2 Four Seasons Health Care Group
+3 Health Data Research UK, University College London, London, UK
+4 University College London Hospitals NIHR Biomedical Research Centre, London, UK
+5 Institute of Epidemiology & Health Care, University College London, London, UK
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message=FALSE)
@@ -918,7 +928,7 @@ Among `r formatbm(desc_residents$DAT_total_residents)` private residents, there 
 
 Care home residents are particularly vulnerable to Covid-19 infection due to their advanced age and high prevalence of comorbidity,[@Zhou2020] and this is compounded by frequent exposure to infection through close contact with infected staff members, other residents and contaminated surfaces in the care home setting. In the UK, an estimated 420,000 residents lived in approximately 11,000 homes for the elderly.[@cqcdata2020] 
 
-At the peak of the pandemic the number of deaths in care home residents was three-fold higher than the equivalent period in in 2019.[@onsDR2020]  Data from the Office for National Statistics suggest that two-thirds of the 29,393 excess deaths recorded in care home residents between 28th December 2019 and 12th June 2020 (calculated relative to equivalent period in the previous year) involved Covid-19.[@onsDR2020] However, estimating the proportion of care home deaths that can be directly attributed to Covid-19 based on death certifications is challenging because many care home residents with suspected infection were not tested, particularly at the start of the pandemic. Understanding the ratio of direct to indirect deaths in care home residents will be critical to inform public health measures to mitigate the impact of the anticipated second wave of the pandemic, since lockdown measures that prevent infection may have a negative impact on residents by disrupting usual care.
+At the peak of the pandemic the number of deaths in care home residents was three-fold higher than the equivalent period in in 2019.[@onsDR2020]  Data from the Office for National Statistics suggest that two-thirds of the 29,393 excess deaths recorded in care home residents between 28th December 2019 and 12th June 2020 (calculated relative to equivalent period in the previous year) involved Covid-19.[@onsDR2020] However, estimating the proportion of care home deaths that can be directly attributed to Covid-19 based on death certifications is challenging because many care home residents with suspected infection were not tested, particularly at the start of the pandemic. Understanding the ratio of direct to indirect deaths in care home residents will be critical to inform public health measures to mitigate the impact of the anticipated second wave of the pandemic, since lockdown measures[@Hale2020] that prevent infection may have a negative impact on residents by disrupting usual care.
 
 Disentangling direct and indirect deaths from Covid-19 requires accurate information on the incidence and prevalence of infection among staff and residents linked to individual-level clinical outcomes. There is no syndromic surveillance for infection in care homes in England, and universal testing for SARS-CoV-2 using reverse transcriptase polymerase chain reaction (RT-PCR) was not established in care homes in England until 11th May 2020, when the government launched the whole care home testing programme.[@dhscTesting2020] Prior to this, testing was only available for care home residents or staff who were admitted to hospital, or as part of Public Health England's (PHE) outbreak investigations with a maximum of five tests per care home. Consequently national estimates of incidence and prevalence based on test results obtained prior to 11th May will substantially underestimate the burden of infection in care home residents and staff.
 
@@ -998,7 +1008,7 @@ where $\hat{F}_i$ designates the predicted probability of death of individual $i
 
 Bedroom occupancy and staffing ratios were estimated on the basis of baseline occupancy averaged before the first cases (between 1 January and 1 March 2020), so as to rule out reverse causality. Dates of discharge were used alongside the death indicator to estimate the case-fatality rate in home and hospital, as well as compare all-cause mortality based on the presence of symptoms and/or confirmed infection. Confirmed infection data in both sources can only be treated as underestimates of the true incidence, due to the gradual increase in nasopharyngeal swab (PCR) testing across the study period following the introduction of whole care home testing on 11 May 2020.[@dhscTesting2020]. By 22 June 2020, 90% of FSHCG care homes had participated in the whole home testing programme.
 
-Data were analysed in `R`3·5·0[@RCoreTeam2018] using the `epitool`[@Aragon2020] and `survival`[@therneau2015] libraries. All computer syntax is available on an online repository.[@Dutey2020] Ninety-five percent confidence intervals for proportions and rates were computed from the exact Poisson and binomial limits.
+Data were analysed in `R`3·5·0 using the `epitool`[@Aragon2020] and `survival`[@therneau2015] libraries. All computer syntax is available on an online repository.[@Dutey2020] Ninety-five percent confidence intervals for proportions and rates were computed from the exact Poisson and binomial limits.
 
 
 # Findings
@@ -1394,7 +1404,7 @@ KM_mortality_plot <- ggsurvplot_facet(
   short.panel.labs	 = T, break.x.by	= 7, 
   break.y.by = .1,
   palette = "aaas", conf.int = T,
-  scales = "free", ggtheme = theme_bw(), xlim = c(0, 104), ylim = c(.4, 1),
+  scales = "free", ggtheme = theme_bw(), xlim = c(0, 104), 
   xlab  = paste0("Days since ", format(date_min, "%e %b %Y")),
   conf.int.alpha = .15, censor.shape = 124, censor.size = 2, size = 0.5)
 
@@ -1548,7 +1558,7 @@ We note that a large proportion of the analysis in this paper was made possible 
 
 ## Funding 
 
-This work was supported by the Economic and Social Research Council [grant reference ES/V003887/1].
+This work was supported by the Economic and Social Research Council [ES/V003887/1].  This work was also supported by a National Institute for Health Research (NIHR) Clinician Scientist award (CS-2016-007 to L.S.); In-Practice fellowship (NIHR300293 to A.J.); a NIHR School of Primary Care Research fellowship (SPCR-118 to A.J.); and a NIHR In-Practice Fellowship (to M.R.). AH and HH are NIHR Senior Investigators . AH and HH are supported by Health Data Research UK (grant No. LOND1), which is funded by the UK Medical Research Council, Engineering and Physical Sciences Research Council, Economic and Social Research Council, Department of Health and Social Care (England), Chief Scientist Office of the Scottish Government Health and Social Care Directorates, Health and Social Care Research and Development Division (Welsh Government), Public Health Agency (Northern Ireland), British Heart Foundation, Wellcome Trust. HH is funded by the NIHR University College London Hospitals Biomedical Research Centre, The BigData@Heart Consortium, funded by the Innovative Medicines Initiative-2 Joint Undertaking under grant agreement No. 116074.
 
 ## Research ethics
 

@@ -1,13 +1,13 @@
 ---
-title: "Incidence of confirmed COVID-19 cases in care home staff and residents: Data quality and methodology report"
+title: 'Incidence of confirmed COVID-19 cases in care home staff and residents: Data
+  quality and methodology report'
 output:
-  html_document:
-    df_print: paged
-    toc: yes
+  html_document: 
     code_folding: hide
-  word_document:
+    df_print: kable
+    keep_md: yes
     toc: yes
-    reference_docx: template.docx
+    toc_depth: 1
 always_allow_html: yes
 ---
 
@@ -381,3 +381,8 @@ Manager-reported outbreak surveillance counts were used together with occupancy 
 
 $$\hat{I_t} = min(n_{t}/n_{t-1}, 1)( \hat{E}_{t-1} + d_{t-1}); \qquad  \qquad  \qquad I_{t_0} = 0$$
 where $d_{t}$ denotes the number of new cases for each day $t = \{0, \ldots, T\}$, while $min(n_{t}/n_{t-1}, 1)$ acts as an (underestimated) approximation of the discharge rate. The total exposure time was calculated as $\sum_{t=0}^{T} (N_t-\hat{I}_t)$ where $N_t$ denotes daily occupancy figures. 
+
+
+
+
+
