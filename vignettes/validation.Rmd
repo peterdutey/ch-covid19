@@ -1,13 +1,17 @@
 ---
 title: 'Incidence of confirmed COVID-19 cases in care home staff and residents: Data
   quality and methodology report'
+bibliography: ../manuscript/references.bib
 output:
-  html_document: 
+  html_document:
     code_folding: hide
     df_print: kable
     keep_md: yes
     toc: yes
     toc_depth: 1
+  word_document:
+    toc: yes
+    toc_depth: '1'
 always_allow_html: yes
 ---
 
@@ -103,8 +107,8 @@ The SARS-CoV-2 status is determined by a combination of fields from the Datix in
 
 Incident reports are dynamic: they are designed to be updated as more information becomes available. If all fields are not accurately kept updated, some values may become inconsistent. Inconsistencies are observed in incident reports  as illustrated in the tabulations below. Due to this, a reclassification algorithm is used which prioritises any information on a positive test result.
 
-```{r }
-print(ctable(incidents$infection_confirmed, incidents$infection_covid_19_type, useNA = "always"), method = 'render')
+```{r , results="asis"}
+ctable(incidents$infection_confirmed, incidents$infection_covid_19_type, useNA = "always", style = "rmarkdown")
 ```
 
 ### Algorithm
@@ -121,7 +125,7 @@ DiagrammeR::grViz("../man/figure/case_classification_2.gv", width=700, height= 4
 ```
 
 ```{r echo = FALSE}
-DiagrammeR::grViz("../man/figure/case_classification_3.gv", width=400, height= 400)
+DiagrammeR::grViz("../man/figure/case_classification_3.gv", width=400, height= 400) 
 ```
 
 
@@ -132,23 +136,32 @@ Data are tabulated below to evaluate the internal consistency of the rules set o
 The `infection_result` field provides information on test results which broadly agrees yet sometimes conflicts with the `infection_confirmed` classification of incidents. It is potentially more up to date although it is very sparsely populated.
 
 
-```{r}
-print(ctable(incidents$infection_covid_19_type, incidents$covid_confirmed, useNA = "always"), method = 'render')
+```{r, results="asis"}
+ctable(incidents$infection_covid_19_type, incidents$covid_confirmed, useNA = "always", style = "rmarkdown")
 ```
 
-```{r}
-print(ctable(incidents$infection_covid_19_type, incidents$covid_test_result, useNA = "always"), method = 'render')
+```{r, results="asis"}
+ctable(incidents$infection_covid_19_type, incidents$covid_test_result, useNA = "always", style = "rmarkdown")
 ```
 
-```{r}
-print(ctable(incidents$infection_confirmed, incidents$covid_test_result, useNA = "always"), method = 'render')
+```{r, results="asis"}
+ctable(incidents$infection_confirmed, incidents$covid_test_result, useNA = "always", style = "rmarkdown")
 ```
 
 ## Data quality
 
+### Data linkage
+
+Secondary use individual-level data for private residents receiving general and elderly care were extracted and pseudonymised by HW. They consisted of two datasets:
+
+- **a residents dataset** containing one record per resident per care home, alongside residents' gender, date of birth, most recent dates of admission and discharge, date of first admission, type of stay (residential/nursing) and care (general, dementia, elderly). This dataset does not include any records for local authority 'block contract' beds.
+- **an incidents dataset** containing `r formatbm(desc_before_exclusions$nrow_incidents)` reports filed by care home staff. Mandated report field were: resident forename, surname, care home identifier, incident date/time, and date/time of reporting. In addition, reports could record: date of birth, gender, information on Covid-19 symptoms, tests and test results, resident current location (home/hospital), and death. Incidents were classified to indicate whether the resident was symptomatic, and whether an infection was confirmed on the basis of multiple variables (supplementary material 1).
+
+HW created a resident index file bridging the two datasets using: the first three letters of the resident's forename; the resident's full surname; and the care home identifier. Clerical review of identifiers generated in this way established that no single identifier was allocated to distinct individuals in the residents' dataset. Just `r desc_before_exclusions$missing_id` (`r tbrounding(desc_before_exclusions$missing_id_pct)`%) incident records did not contain enough information to generate an identifier and were excluded. Identifiers of a further `r desc_before_exclusions$link_fail` records (`r desc_before_exclusions$link_fail_pct`%) could not be successfully linked to the residents dataset and were excluded, after clerical review established they could not be matched with a resident. A proportion of these records may have been filed in error, while others may relate to occupants of local authority beds who are not accounted for in the residents' dataset.
+
 ### Exclusions
 
-A total of `r desc_before_exclusions$nrow_incidents` were obtained. Resident pseudoidentifiers were absent in `r formatbm(desc_before_exclusions$missing_id)` (`r tbrounding(desc_before_exclusions$missing_id_pct)`%) of Datix incident reports. The pseudoidentifiers of a further `r desc_before_exclusions$link_fail ` reports (`r tbrounding(desc_before_exclusions$link_fail /desc_before_exclusions$nrow_incidents*100)`%) were could not be successfully linked to the residents database. All were excluded, leaving a total of `r nrow(incidents)` reports dated between `r format(date_min, "%A %e %b %Y")` and  `r format(date_max, "%A %e %b %Y")` relating to `r formatbm(dplyr::n_distinct(incidents$resident_id))` unique residents.
+A total of `r desc_before_exclusions$nrow_incidents` incident reports were obtained. Resident pseudoidentifiers were absent in `r formatbm(desc_before_exclusions$missing_id)` (`r tbrounding(desc_before_exclusions$missing_id_pct)`%) of Datix incident reports. The pseudoidentifiers of a further `r desc_before_exclusions$link_fail ` reports (`r tbrounding(desc_before_exclusions$link_fail /desc_before_exclusions$nrow_incidents*100)`%) were could not be successfully linked to the residents database. All were excluded, leaving a total of `r nrow(incidents)` reports dated between `r format(date_min, "%A %e %b %Y")` and  `r format(date_max, "%A %e %b %Y")` relating to `r formatbm(dplyr::n_distinct(incidents$resident_id))` unique residents.
 These reports belongued to `r formatbm(dplyr::n_distinct(incidents$home_code))` care homes totalling `r formatbm(sum(beds[beds$year=="2020" & beds$home_code %in% unique(incidents$home_code), "beds"]))` beds. For the period of study, the Four Seasons Health Care Group (FSHCG) comprises `r formatbm(dplyr::n_distinct(beds[beds$year=="2020", "home_code"]))` care homes with a total of `r formatbm(sum(beds[beds$year=="2020", "beds"]))` beds.
 
 ### Occupancy
@@ -272,13 +285,13 @@ ggplot(occ_global, aes(x = occupancy, y = approx_occupancy)) +
     values = c(1, 3)) 
 ```
 
-We nevertheless identified 11 care homes in which the total resident-days approximated differed by more than 10 percent despite not belonging (marked on Figure 2, see list below).
+We nevertheless identified 11 care homes in which the total resident-days approximated differed by more than 10 percent despite not belonging (marked on Figure 2).
 
 ```{r, message=F}
-merge(dplyr::select(reference_homes, home_code, home_name_datix),
-      dplyr::filter(occ_global, outliers != "")) %>%
-  dplyr::transmute(home_code, home_name_datix, approx_occupancy, occupancy,
-                   `% contract beds` = round(pct_contract*100, 1))
+# merge(dplyr::select(reference_homes, home_code, home_name_datix),
+#       dplyr::filter(occ_global, outliers != "")) %>%
+#   dplyr::transmute(home_code, home_name_datix, approx_occupancy, occupancy,
+#                    `% contract beds` = round(pct_contract*100, 1))
 ```
 
 ### Comparison of manager-reported tally counts with Datix-derived counts
@@ -335,7 +348,7 @@ During the period, manager counted `r sum(ch_data_all$tally_confirmed)` confirme
 3. linkage error
 4. double-counting of cases in manager counts
 
-It is not possible to rely on explanation (1) exclusively: the number of confirmed infections on Datix was greater than manager counts in `r sum(ch_data_all$datix_confirmed > ch_data_all$tally_confirmed)` care homes. This suggest double counting (4) is a real possibility.
+It is not possible to rely on explanations (1-3) exclusively: the number of confirmed infections on Datix was greater than manager counts in `r sum(ch_data_all$datix_confirmed > ch_data_all$tally_confirmed)` care homes. This suggest double counting (4) is a possibility.
 
 
 ```{r comparison_symptomatic, message = F}
@@ -383,6 +396,11 @@ $$\hat{I_t} = min(n_{t}/n_{t-1}, 1)( \hat{E}_{t-1} + d_{t-1}); \qquad  \qquad  \
 where $d_{t}$ denotes the number of new cases for each day $t = \{0, \ldots, T\}$, while $min(n_{t}/n_{t-1}, 1)$ acts as an (underestimated) approximation of the discharge rate. The total exposure time was calculated as $\sum_{t=0}^{T} (N_t-\hat{I}_t)$ where $N_t$ denotes daily occupancy figures. 
 
 
+# Total homes, beds, contract beds, and residents within FSHCG and nationwide
+
+
+Data sources: [@cqcdata2020; @hscni2020; @isd2020]
 
 
 
+# References
