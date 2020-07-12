@@ -42,5 +42,7 @@ RoxygenNote: 7.0.2
 Suggests: 
     testthat (>= 2.1.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    DiagrammeRsvg,
+    rsvg
 VignetteBuilder: knitr

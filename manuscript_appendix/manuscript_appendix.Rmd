@@ -11,7 +11,8 @@ output:
     toc_depth: 1
   word_document:
     toc: yes
-    toc_depth: '1'
+    toc_depth: 1
+    reference_docx: ../manuscript/template.docx
 always_allow_html: yes
 ---
 
@@ -35,6 +36,9 @@ source("../.Rprofile")
 devtools::load_all("..")
 library(dplyr)
 library(ggplot2)
+library(DiagrammeR)
+library(DiagrammeRsvg)
+library(rsvg)
 load_data()
 date_min <- as.Date("2020-03-02")
 date_max <- as.Date("2020-06-07") #as.Date("2020-06-15")
@@ -81,7 +85,7 @@ new_cases <- filter(new_cases, between(date, date_min, date_max_tallies)) %>%
 
 ```
 
-## Overview
+# Overview
 
 This report provides additional information on the validation of: 
 
@@ -90,7 +94,7 @@ This report provides additional information on the validation of:
 - overall numbers of symptomatic and confirmed cases
 
 
-## Classification of SARS-CoV-2 cases from incident reports
+# Classification of SARS-CoV-2 cases from incident reports
 
 The SARS-CoV-2 status is determined by a combination of fields from the Datix incidents management system: 
 
@@ -111,25 +115,31 @@ Incident reports are dynamic: they are designed to be updated as more informatio
 ctable(incidents$infection_confirmed, incidents$infection_covid_19_type, useNA = "always", style = "rmarkdown")
 ```
 
-### Algorithm
+## Algorithm
 
 The following algorithm is used to classify symptomatic, tested, and test-confirmed cases from the Datix reports of COVID-19 infections.
 
 
 ```{r echo=FALSE}
-DiagrammeR::grViz("../man/figure/case_classification_1.gv", width=700, height= 500)
+DiagrammeR::grViz("../man/figure/case_classification_1.gv", width=700, height= 500) %>% 
+  export_svg %>% charToRaw %>% rsvg::rsvg_png("case_classification_1.png", )
+knitr::include_graphics("case_classification_1.png")
 ```
 
 ```{r echo = FALSE}
-DiagrammeR::grViz("../man/figure/case_classification_2.gv", width=700, height= 400)
+grViz("../man/figure/case_classification_2.gv", width=700, height= 400) %>% 
+  export_svg %>% charToRaw %>% rsvg::rsvg_png("case_classification_2.png")
+knitr::include_graphics("case_classification_2.png")
 ```
 
 ```{r echo = FALSE}
-DiagrammeR::grViz("../man/figure/case_classification_3.gv", width=400, height= 400) 
+DiagrammeR::grViz("../man/figure/case_classification_3.gv", width=400, height= 400)  %>% 
+  export_svg %>% charToRaw %>% rsvg::rsvg_png("case_classification_3.png")
+knitr::include_graphics("case_classification_3.png")
 ```
 
 
-### Validation
+## Validation
 
 Data are tabulated below to evaluate the internal consistency of the rules set out in the previous section.
 
@@ -148,9 +158,9 @@ ctable(incidents$infection_covid_19_type, incidents$covid_test_result, useNA = "
 ctable(incidents$infection_confirmed, incidents$covid_test_result, useNA = "always", style = "rmarkdown")
 ```
 
-## Data quality
+# Data quality
 
-### Data linkage
+## Data linkage
 
 Secondary use individual-level data for private residents receiving general and elderly care were extracted and pseudonymised by HW. They consisted of two datasets:
 
@@ -159,12 +169,12 @@ Secondary use individual-level data for private residents receiving general and 
 
 HW created a resident index file bridging the two datasets using: the first three letters of the resident's forename; the resident's full surname; and the care home identifier. Clerical review of identifiers generated in this way established that no single identifier was allocated to distinct individuals in the residents' dataset. Just `r desc_before_exclusions$missing_id` (`r tbrounding(desc_before_exclusions$missing_id_pct)`%) incident records did not contain enough information to generate an identifier and were excluded. Identifiers of a further `r desc_before_exclusions$link_fail` records (`r desc_before_exclusions$link_fail_pct`%) could not be successfully linked to the residents dataset and were excluded, after clerical review established they could not be matched with a resident. A proportion of these records may have been filed in error, while others may relate to occupants of local authority beds who are not accounted for in the residents' dataset.
 
-### Exclusions
+## Exclusions
 
 A total of `r desc_before_exclusions$nrow_incidents` incident reports were obtained. Resident pseudoidentifiers were absent in `r formatbm(desc_before_exclusions$missing_id)` (`r tbrounding(desc_before_exclusions$missing_id_pct)`%) of Datix incident reports. The pseudoidentifiers of a further `r desc_before_exclusions$link_fail ` reports (`r tbrounding(desc_before_exclusions$link_fail /desc_before_exclusions$nrow_incidents*100)`%) were could not be successfully linked to the residents database. All were excluded, leaving a total of `r nrow(incidents)` reports dated between `r format(date_min, "%A %e %b %Y")` and  `r format(date_max, "%A %e %b %Y")` relating to `r formatbm(dplyr::n_distinct(incidents$resident_id))` unique residents.
 These reports belongued to `r formatbm(dplyr::n_distinct(incidents$home_code))` care homes totalling `r formatbm(sum(beds[beds$year=="2020" & beds$home_code %in% unique(incidents$home_code), "beds"]))` beds. For the period of study, the Four Seasons Health Care Group (FSHCG) comprises `r formatbm(dplyr::n_distinct(beds[beds$year=="2020", "home_code"]))` care homes with a total of `r formatbm(sum(beds[beds$year=="2020", "beds"]))` beds.
 
-### Occupancy
+## Occupancy
 
 ```{r occupancy_appx}
 approx_occupancy <- tline %>% 
@@ -270,8 +280,8 @@ ggplot(occ_home, aes(x = occupancy, y = approx_occupancy)) +
 
 ggplot(occ_global, aes(x = occupancy, y = approx_occupancy)) +
   geom_point(aes(shape = contract_10pc)) +
-  geom_text(aes(label = outliers), 
-            nudge_x = .1,  nudge_y = .15, vjust = "outward", hjust = "outward") +
+  # geom_text(aes(label = outliers), 
+  #           nudge_x = .1,  nudge_y = .15, vjust = "outward", hjust = "outward") +
    geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
   geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
   xlab("Occupancy provided by FSHC") +
@@ -294,7 +304,7 @@ We nevertheless identified 11 care homes in which the total resident-days approx
 #                    `% contract beds` = round(pct_contract*100, 1))
 ```
 
-### Comparison of manager-reported tally counts with Datix-derived counts
+## Comparison of manager-reported tally counts with Datix-derived counts
 
 ```{r case_validation, message=F}
 residents_overview <- tline %>% 
@@ -355,8 +365,8 @@ It is not possible to rely on explanations (1-3) exclusively: the number of conf
 ggplot(data = ch_data_all, 
        aes(x = tally_symptomatic, y = datix_symptomatic)) + 
   geom_point(aes(shape = contract_10pc)) +
-  geom_text(aes(label = home_code_lbl),
-            nudge_x = 2,  nudge_y = 1) + 
+  # geom_text(aes(label = home_code_lbl),
+  #           nudge_x = 2,  nudge_y = 1) + 
   geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
   geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
   xlab("Manager counts") + ylab("Datix-derived counts") + labs(title="Figure 3: Comparison of Datix and manager counts of symptomatic cases") +
@@ -373,8 +383,8 @@ ggplot(data = ch_data_all,
 
 ggplot(data = ch_data_all, aes(x = tally_confirmed, y = datix_confirmed)) + 
   geom_point(aes(shape = contract_10pc)) +
-  geom_text(aes(label = home_code_lbl2), 
-            nudge_x = 1,  nudge_y = 1.2) + 
+  # geom_text(aes(label = home_code_lbl2), 
+  #           nudge_x = 1,  nudge_y = 1.2) + 
   geom_abline(aes(intercept = 0, slope = 1,  col = "Identity", linetype = "Identity")) +
   geom_smooth(aes(col="OLS", linetype = "OLS"), method = "lm", se = T) +
   xlab("Manager counts") + ylab("Datix-derived counts") + labs(title="Figure 4: Comparison of Datix and manager counts of confirmed cases") +
@@ -388,7 +398,7 @@ ggplot(data = ch_data_all, aes(x = tally_confirmed, y = datix_confirmed)) +
 ```
 
 
-## Estimating the cumulative incidence of cases and resident-days at risk
+# Estimating the cumulative incidence of cases and resident-days at risk
 
 Manager-reported outbreak surveillance counts were used together with occupancy estimated from weekly occupied bed censuses in order to estimate the incidence of cases across time using a Kaplan-Meier life table product limit estimator. As the total exposed-to-risk (susceptible resident-days) was unknown, it was approximated in a multiple decrements life table by making the assumption that previously symptomatic/confirmed residents were discharged at the same rate as susceptible residents, as was suggested by the individual-level records. Admitted cases were accounted for in the daily new case count. Based on this $\hat{I_t}$, the estimated number or previously symptomatic/confirmed residents present in the home on day $t$ was computed as
 

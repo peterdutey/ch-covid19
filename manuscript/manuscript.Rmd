@@ -1,16 +1,15 @@
 ---
 title: "Covid-19 infection and attributable mortality in residents of UK care homes: Cohort study using electronic records (March-June 2020)"
-# author: "Dutey-Magni, PF, Williams, H, Hayward, A, Shallcross, L"
 bibliography: references.bib
 csl: sage-vancouver.csl
 output:
-  word_document:
-    toc: yes
-    reference_docx: template.docx
   html_document:
     df_print: paged
     toc: yes
     code_folding: hide
+  word_document:
+    toc: yes
+    reference_docx: template.docx
 link-citations: yes
 always_allow_html: yes
 ---
@@ -1042,6 +1041,11 @@ In England, `r england_results$FSHC_confirmed` infections were confirmed of a to
 
 
 ```{r fig_KM_CT_plots, fig.height = 4, fig.width = 12, message=FALSE}
+
+km_ct_residents_symp$y <- (1-km_ct_residents_symp$S_t) * desc_residents$CT_total_residents
+km_ct_residents_confirmed$y <- (1-km_ct_residents_confirmed$S_t) * desc_residents$CT_total_residents
+km_ct_residents_deaths$y <- (1-km_ct_residents_deaths$S_t) * desc_residents$CT_total_residents
+                              
 write.csv(km_ct_residents_symp, file = "supp_table_kaplan_meier_residents_symptomatic.csv", row.names = F)
 write.csv(km_ct_residents_confirmed, file = "supp_table_kaplan_meier_residents_confirmed.csv", row.names = F)
 write.csv(km_ct_residents_deaths, file = "supp_table_kaplan_meier_residents_deaths.csv", row.names = F)
@@ -1070,7 +1074,7 @@ km_residents_graph <- ggplot(aes(x = date, y = 1-S_t,
     date == get_monday_date(date),
     formatbm(round((1-S_t) * desc_residents$CT_total_residents)),
     ""
-  )), position = position_nudge(y = .02)) +
+  )), size = 3, position = position_nudge(y = .02)) +
   scale_y_continuous("Cumulative incidence",
                      breaks = seq(0,1,.02)) +
   ggsci::scale_color_lancet() +
@@ -1095,6 +1099,9 @@ all_km_staff$Event <- factor(
     "Confirmed infection"
   )
 )
+
+km_staff_symptomatic$y <- (1-km_staff_symptomatic$S_t) * desc_staff$total_staff
+km_staff_confirmed$y <- (1-km_staff_confirmed$S_t) * desc_staff$total_staff
 write.csv(km_staff_symptomatic, file = "supp_table_kaplan_meier_staff_symptomatic.csv", row.names = F)
 write.csv(km_staff_confirmed, file = "supp_table_kaplan_meier_staff_confirmed.csv", row.names = F)
 
@@ -1108,7 +1115,7 @@ km_staff_graph <- ggplot(aes(x = date, y = 1-S_t,
     date == get_monday_date(date),
     formatbm(round((1-S_t) * desc_staff$total_staff)),
     ""
-  )), position = position_nudge(y = .02)) +
+  )), size = 3, position = position_nudge(y = .02)) +
   ggsci::scale_color_lancet()+
   scale_y_continuous("Cumulative incidence",
                      breaks = seq(0,1,.02)) +
@@ -1314,10 +1321,10 @@ knitr::kable(CPH_confirmed,
 
 
 ```{r tablefiller1, results="asis"}
-arsenal::tableby(
-  confirmed  ~ gender + ageg  +  home_type + user_type2 +bed_tot_category + bed_to_staff_ratio +  occ_bedroom_ratio_g6, 
-  control = arsenal::tableby.control(test = FALSE, cat.stats = "countrowpct", digits = 1L),
-  data = residents_overview) %>%  summary()
+# arsenal::tableby(
+#   confirmed  ~ gender + ageg  +  home_type + user_type2 +bed_tot_category + bed_to_staff_ratio +  occ_bedroom_ratio_g6, 
+#   control = arsenal::tableby.control(test = FALSE, cat.stats = "countrowpct", digits = 1L),
+#   data = residents_overview) %>%  summary()
 
 # residents_overview %>% 
 #   mutate(confirmed = as.factor(confirmed)) %>% 
@@ -1396,11 +1403,11 @@ knitr::kable(CPH_death, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
 
 
 ```{r tablefiller2, results="asis"}
-residents_overview$death_status <- as.integer(residents_overview$status == "Deceased")
-arsenal::tableby(
-  death_status  ~ gender + ageg  +  home_type + user_type2  + bed_to_staff_ratio + bed_tot_category +  occ_bedroom_ratio_g6 + covid_status_outbreak, 
-  control = arsenal::tableby.control(test = FALSE, cat.stats = "countrowpct", digits = 1L),
-  data = residents_overview) %>%  summary()
+# residents_overview$death_status <- as.integer(residents_overview$status == "Deceased")
+# arsenal::tableby(
+#   death_status  ~ gender + ageg  +  home_type + user_type2  + bed_to_staff_ratio + bed_tot_category +  occ_bedroom_ratio_g6 + covid_status_outbreak, 
+#   control = arsenal::tableby.control(test = FALSE, cat.stats = "countrowpct", digits = 1L),
+#   data = residents_overview) %>%  summary()
 
 # residents_overview %>% 
 #   mutate(confirmed = as.factor(confirmed)) %>% 
@@ -1438,6 +1445,13 @@ pdf("figure3.pdf", 8, 6)
 KM_mortality_plot
 dev.off()
 KM_mortality_plot
+
+summary(KM_mortality_by_covid_status)[c("time",  "n.risk", "n.event", "n.censor", "surv", "strata")] %>% 
+  as_tibble %>% 
+  mutate(infection = gsub("covid_status=", "", gsub(", outbreak=.*", "", strata)),
+         outbreak = gsub(".*, outbreak=", "", strata))  %>% 
+  select(-strata) %>% 
+  write.csv(file = "supp_table_kaplan_meier_indiv_alldeaths.csv", row.names = F)
 ```
 
 `r fig_nums("fig_KM_mortality")`
