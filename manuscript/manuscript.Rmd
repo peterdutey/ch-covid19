@@ -1315,7 +1315,7 @@ knitr::kable(CPH_confirmed,
 
 ```{r tablefiller1, results="asis"}
 arsenal::tableby(
-  confirmed  ~ gender + ageg  +  home_type + user_type2  + staff_to_bed_ratio_g5 +  occ_bedroom_ratio_g6, 
+  confirmed  ~ gender + ageg  +  home_type + user_type2 +bed_tot_category + bed_to_staff_ratio +  occ_bedroom_ratio_g6, 
   control = arsenal::tableby.control(test = FALSE, cat.stats = "countrowpct", digits = 1L),
   data = residents_overview) %>%  summary()
 
@@ -1398,7 +1398,7 @@ knitr::kable(CPH_death, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
 ```{r tablefiller2, results="asis"}
 residents_overview$death_status <- as.integer(residents_overview$status == "Deceased")
 arsenal::tableby(
-  death_status  ~ gender + ageg  +  home_type + user_type2  + staff_to_bed_ratio_g5 +  occ_bedroom_ratio_g6, 
+  death_status  ~ gender + ageg  +  home_type + user_type2  + bed_to_staff_ratio + bed_tot_category +  occ_bedroom_ratio_g6 + covid_status_outbreak, 
   control = arsenal::tableby.control(test = FALSE, cat.stats = "countrowpct", digits = 1L),
   data = residents_overview) %>%  summary()
 
@@ -1442,7 +1442,7 @@ KM_mortality_plot
 
 `r fig_nums("fig_KM_mortality")`
 
-### Attributable mortality
+## Attributable mortality
 
 Model-based estimates of attributable mortality were derived from the individual-level data. Overall, 567/1,694 (33%) deaths were attributed to Covid-19. In homes with outbreaks only 28% (159 residents) of the mortality attributable to COVID-19 occurred in people with confirmed infection (Groups C and D), (`r table_nums("tab_attributable_deaths", display = "cite")`). Exclusion of the early pandemic period in sensitivity analysis increased attributable mortality to 560/1,343 (41·7%). Model-based estimates of deaths based on individual-level were slightly higher (8%) than counts from the aggregate data.
 
@@ -1563,7 +1563,7 @@ In common with a Canadian cohort study,[@Brown2020] we found strong associations
 
 ## Strengths and limitations
 
-#The unique surveillance system we established in partnership with FSHCG allowed us to track infections throughout the entire pandemic period across a large number of care homes, and identify symptomatic as well as confirmed and asymptomatic cases. To our knowledge, this is the most compete reporting system for Covid-19 infections in care homes published to date.  It is possible that care homes that paid less attention to active surveillance to support control will have had higher levels of uncontrolled outbreaks compared to those seen in this study.
+The unique surveillance system we established in partnership with FSHCG allowed us to track infections throughout the entire pandemic period across a large number of care homes, and identify symptomatic as well as confirmed and asymptomatic cases. To our knowledge, this is the most compete reporting system for Covid-19 infections in care homes published to date.  It is possible that care homes that paid less attention to active surveillance to support control will have had higher levels of uncontrolled outbreaks compared to those seen in this study.
 
 A limitation is lack of access to information on comorbidity and ethnicity, both of which have been shown to be important risk factors for adverse outcomes in Covid-19.[@Zhou2020] However, we were able to identify individuals with dementia, and adjust for receipt of nursing care which will partially capture comorbidity.  We also lacked information on the overall rate of care home testing.
 
@@ -1606,7 +1606,7 @@ Datix incidents reports recorded that `r formatbm(desc_residents$unique_resident
 | Cases      | `r formatbm(desc_residents$DAT_total_symptomatic)` |	`r formatbm(desc_residents$unique_residents_test_result_positive)` | `r formatbm(desc_residents$DAT_total_deaths)`  |
 |	$N$ exposed  | `r formatbm(desc_residents$DAT_total_residents)`|	`r formatbm(desc_residents$DAT_total_residents)` | `r formatbm(desc_residents$DAT_total_residents)` |
 |	Total exposure (days)|`r formatbm(desc_residents$DAT_total_symptomatic_denom)`|	`r formatbm(desc_residents$DAT_total_confirmed_denom)` | `r formatbm(desc_residents$total_denom)` |
-|	Incidence proportion (%)  | `r tbrounding(desc_residents$DAT_p_symptomatic)` [`r tbrounding(desc_residents$DAT_p_symptomatic_lower)`; `r tbrounding(desc_residents$DAT_p_symptomatic_upper)`] |`r tbrounding(desc_residents$DAT_p_confirmed)` [`r tbrounding(desc_residents$DAT_p_confirmed_lower)`; `r tbrounding(desc_residents$DAT_p_confirmed_upper)`] |`r tbrounding(desc_residents$DAT_p_death)` [`r tbrounding(desc_residents$DAT_p_death_lower)`; `r tbrounding(desc_residents$DAT_p_death_upper)`] |
+|	Cumulative incidence (%)  | `r tbrounding(desc_residents$DAT_p_symptomatic)` [`r tbrounding(desc_residents$DAT_p_symptomatic_lower)`; `r tbrounding(desc_residents$DAT_p_symptomatic_upper)`] |`r tbrounding(desc_residents$DAT_p_confirmed)` [`r tbrounding(desc_residents$DAT_p_confirmed_lower)`; `r tbrounding(desc_residents$DAT_p_confirmed_upper)`] |`r tbrounding(desc_residents$DAT_p_death)` [`r tbrounding(desc_residents$DAT_p_death_lower)`; `r tbrounding(desc_residents$DAT_p_death_upper)`] |
 |	Incidence rate (per 100,000) | `r tbrounding(desc_residents$DAT_IR_symptomatic)` [`r tbrounding(desc_residents$DAT_IR_symptomatic_lower)`; `r tbrounding(desc_residents$DAT_IR_symptomatic_upper)`] | `r tbrounding(desc_residents$DAT_IR_confirmed)`  [`r tbrounding(desc_residents$DAT_IR_confirmed_lower)`; `r tbrounding(desc_residents$DAT_IR_confirmed_upper)`] | `r tbrounding(desc_residents$DAT_IR_death)` [`r tbrounding(desc_residents$DAT_IR_death_lower)`; `r tbrounding(desc_residents$DAT_IR_death_upper)` ]|
   
 
