@@ -1,6 +1,7 @@
 # Covid-19 infection and attributable mortality in UK long term care facilities: Cohort study using active surveillance and electronic records (March-June 2020)
 
 <!-- badges: start -->
+[![DOI](https://zenodo.org/badge/256141328.svg)](https://zenodo.org/badge/latestdoi/256141328)
 <!-- badges: end -->
 
 
