@@ -1,6 +1,5 @@
 ---
-title: 'Incidence of confirmed COVID-19 cases in care home staff and residents: Data
-  quality and methodology report'
+title: "Covid-19 infection and attributable mortality in UK long term care facilities: Data quality and methodology report"
 bibliography: ../manuscript/references.bib
 output:
   html_document:
