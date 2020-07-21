@@ -2,16 +2,16 @@
 title: "Covid-19 infection and attributable mortality in UK long term care facilities: Data quality and methodology report"
 bibliography: ../manuscript/references.bib
 output:
+  word_document:
+    toc: yes
+    toc_depth: 1
+    reference_docx: ../manuscript/template.docx
   html_document:
     code_folding: hide
     df_print: kable
     keep_md: yes
     toc: yes
     toc_depth: 1
-  word_document:
-    toc: yes
-    toc_depth: 1
-    reference_docx: ../manuscript/template.docx
 always_allow_html: yes
 ---
 
@@ -40,9 +40,9 @@ library(DiagrammeRsvg)
 library(rsvg)
 load_data()
 date_min <- as.Date("2020-03-02")
-date_max <- as.Date("2020-06-07") #as.Date("2020-06-15")
+date_max <- as.Date("2020-06-14") #as.Date("2020-06-15")
 date_min_tallies <- as.Date("2020-03-24")
-date_max_tallies = as.Date("2020-06-07")
+date_max_tallies = as.Date("2020-06-14")
 
 
 tline <- dplyr::bind_rows(timelines$timeline)
@@ -170,8 +170,8 @@ HW created a resident index file bridging the two datasets using: the first thre
 
 ## Exclusions
 
-A total of `r desc_before_exclusions$nrow_incidents` incident reports were obtained. Resident pseudoidentifiers were absent in `r formatbm(desc_before_exclusions$missing_id)` (`r tbrounding(desc_before_exclusions$missing_id_pct)`%) of Datix incident reports. The pseudoidentifiers of a further `r desc_before_exclusions$link_fail ` reports (`r tbrounding(desc_before_exclusions$link_fail /desc_before_exclusions$nrow_incidents*100)`%) were could not be successfully linked to the residents database. All were excluded, leaving a total of `r nrow(incidents)` reports dated between `r format(date_min, "%A %e %b %Y")` and  `r format(date_max, "%A %e %b %Y")` relating to `r formatbm(dplyr::n_distinct(incidents$resident_id))` unique residents.
-These reports belongued to `r formatbm(dplyr::n_distinct(incidents$home_code))` care homes totalling `r formatbm(sum(beds[beds$year=="2020" & beds$home_code %in% unique(incidents$home_code), "beds"]))` beds. For the period of study, the Four Seasons Health Care Group (FSHCG) comprises `r formatbm(dplyr::n_distinct(beds[beds$year=="2020", "home_code"]))` care homes with a total of `r formatbm(sum(beds[beds$year=="2020", "beds"]))` beds.
+A total of `r formatbm(desc_before_exclusions$nrow_incidents)` incident reports were obtained. Resident pseudoidentifiers were absent in `r formatbm(desc_before_exclusions$missing_id)` (`r tbrounding(desc_before_exclusions$missing_id_pct)`%) of Datix incident reports. The pseudoidentifiers of a further `r desc_before_exclusions$link_fail ` reports (`r tbrounding(desc_before_exclusions$link_fail /desc_before_exclusions$nrow_incidents*100)`%) were could not be successfully linked to the residents database. All were excluded, leaving a total of `r nrow(incidents)` reports dated between `r format(date_min, "%A %e %B %Y")` and  `r format(date_max, "%A %e %B %Y")` relating to `r formatbm(dplyr::n_distinct(incidents$resident_id))` unique residents.
+These reports belonged to `r formatbm(dplyr::n_distinct(incidents$home_code))` care homes totalling `r formatbm(sum(beds[beds$year=="2020" & beds$home_code %in% unique(incidents$home_code), "beds"]))` beds. For the period of study, the Four Seasons Health Care Group (FSHCG) comprises `r formatbm(dplyr::n_distinct(beds[beds$year=="2020", "home_code"]))` care homes with a total of `r formatbm(sum(beds[beds$year=="2020", "beds"]))` beds.
 
 ## Occupancy
 
