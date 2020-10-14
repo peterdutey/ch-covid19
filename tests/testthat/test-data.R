@@ -24,9 +24,6 @@ test_that("age_groups", {
 
   expect_equal(as.character(cut_age_pentadecimal(102)), "100–114 years")
   expect_equal(as.character(cut_age_pentadecimal(150)), NA_character_)
-
-
-
 })
 
 
@@ -62,5 +59,11 @@ test_that("total_cases_in_home", {
   truncated_result <- rev(truncated_result)
   expect_equal(trunc(total_cases_in_home(data$occupancy, data$new_cases, data$date)),
                truncated_result)
+
+})
+
+test_that("lsoa data", {
+  example <- extract_datazones_2001(c('G21 3TX', 'AB10 1BD'))
+  expect_equivalent(example$dtz01, c("S01000109", "S01003644"))
 
 })

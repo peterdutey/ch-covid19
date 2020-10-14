@@ -46,3 +46,5 @@ Suggests:
     DiagrammeRsvg,
     rsvg
 VignetteBuilder: knitr
+Depends: 
+    SPARQL

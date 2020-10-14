@@ -371,6 +371,58 @@ extract_occupancy <- function() {
   usethis::ui_done("occupancy.rda")
 }
 
+
+#' @rdname extract_data
+extract_deprivation <- function() {
+
+  IMD_2019_source <- url("https://data.bris.ac.uk/datasets/1ef3q32gybk001v77c1ifmty7x/uk_imd_scores_data.txt")
+  IMD_2019_data <- read.delim(IMD_2019_source, stringsAsFactors = F)
+  IMD_2019_data <- dplyr::select(IMD_2019_data,
+                                 area_code,
+                                 uk_imd_england_score,
+                                 uk_imd_england_quintile)
+  IMD_2019_data
+}
+
+#' @rdname extract_data
+extract_lsoa <- function() {
+  x <- read.csv(url("http://infuse.ukdataservice.ac.uk/help/definitions/2011geographies/lsoa-area-list2011.csv"))
+  names(x) <- tolower(names(x))
+  x$lsoa_code <- trimws(x$area_id)
+  x$lsoa_label <- gsub("_", " ", x$area_label)
+  x[, c("lsoa_code", "lsoa_label")]
+}
+
+
+#' @rdname extract_data
+#' @import SPARQL
+extract_datazones_2001 <- function(postcodes) {
+  query <- paste0(
+    "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?postcode ?dtz01
+WHERE {
+  ?s rdf:type <http://data.ordnancesurvey.co.uk/ontology/postcode/PostcodeUnit> .
+  ?s rdfs:label ?postcode
+  FILTER(?postcode IN ('",
+    paste(postcodes, collapse = "', '"),
+    "')) .
+    ?s <http://publishmydata.com/def/ontology/foi/within> ?dtz .
+  ?dtz <http://publishmydata.com/def/ontology/foi/memberOf> <http://statistics.gov.scot/def/foi/collection/data-zones-2001> .
+  ?dtz <http://publishmydata.com/def/ontology/foi/code> ?dtz01
+  }"
+  )
+
+  query <- gsub("\n", " ", query)
+
+  results <- SPARQL::SPARQL(
+    url = "http://statistics.gov.scot/sparql",
+    query = query)
+
+  results$results
+}
+
+
 #' @rdname extract_data
 #' @import PostcodesioR
 extract_reference_homes <- function() {
@@ -433,6 +485,38 @@ extract_reference_homes <- function() {
     reference_geography,
     region_UK = if_else(country == "England", region, country)
   )
+
+  lsoa_data <- extract_lsoa()
+  lsoa_data <- dplyr::filter(lsoa_data, !grepl("^S01", lsoa_code))
+  reference_geography <- dplyr::left_join(
+    reference_geography,
+    lsoa_data,
+    by = c("lsoa" = "lsoa_label")
+  )
+
+  scottish_postcodes <- reference_geography$postcode[
+    reference_geography$region_UK == "Scotland"]
+  scottish_postcodes <- extract_datazones_2001(scottish_postcodes)
+
+  reference_geography <- dplyr::left_join(
+    reference_geography,
+    scottish_postcodes,
+    by = "postcode"
+  ) %>%
+    dplyr::mutate(area_code = dplyr::if_else(
+      region_UK == "Scotland",
+      dtz01,
+      lsoa_code
+    ))
+
+  IMD_2019_data <- extract_deprivation()
+  reference_geography <- dplyr::left_join(
+    reference_geography,
+    IMD_2019_data,
+    by = "area_code"
+  )
+
+  reference_geography <- unique(reference_geography)
 
   save(reference_geography, file = file.path(getOption("fshc_files"), "reference_geography.rda"))
   usethis::ui_done("reference_geography.rda")

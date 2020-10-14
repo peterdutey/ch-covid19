@@ -5,6 +5,9 @@
 \alias{extract_incidents}
 \alias{extract_residents}
 \alias{extract_occupancy}
+\alias{extract_deprivation}
+\alias{extract_lsoa}
+\alias{extract_datazones_2001}
 \alias{extract_reference_homes}
 \alias{extract_tallies}
 \alias{extract_timelines}
@@ -15,6 +18,12 @@ extract_incidents()
 extract_residents()
 
 extract_occupancy()
+
+extract_deprivation()
+
+extract_lsoa()
+
+extract_datazones_2001(postcodes)
 
 extract_reference_homes()
 
