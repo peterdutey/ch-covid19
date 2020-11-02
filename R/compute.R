@@ -445,7 +445,7 @@ total_cases_in_home <- function(occupancy, new_cases, order_by) {
   occupancy <- occupancy[sort_vector]
   new_cases <- new_cases[sort_vector]
 
-  occupancy_change_rate <- pmin(1, tidyr::replace_na(occupancy/lag(occupancy), 1))
+  occupancy_change_rate <- pmin(1, tidyr::replace_na(occupancy/dplyr::lag(occupancy), 1))
 
   stopifnot(all(occupancy_change_rate <= 1 & occupancy_change_rate >= 0))
   I_t <- 0

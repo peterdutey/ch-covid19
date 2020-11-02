@@ -55,7 +55,8 @@ test_that("total_cases_in_home", {
   expect_equal(trunc(total_cases_in_home(data$occupancy, data$new_cases, data$date)),
                truncated_result)
 
-  data <- rev(data)
+  # works when data frame is reversed too, thanks to the order_by parameter
+  data <- data[5:1,]
   truncated_result <- rev(truncated_result)
   expect_equal(trunc(total_cases_in_home(data$occupancy, data$new_cases, data$date)),
                truncated_result)
