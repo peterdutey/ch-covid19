@@ -399,10 +399,33 @@ ggplot(data = ch_data_all, aes(x = tally_confirmed, y = datix_confirmed)) +
 
 # Estimating the cumulative incidence of cases and resident-days at risk
 
-Manager-reported outbreak surveillance counts were used together with occupancy estimated from weekly occupied bed censuses in order to estimate the incidence of cases across time using a Kaplan-Meier life table product limit estimator. As the total exposed-to-risk (susceptible resident-days) was unknown, it was approximated in a multiple decrements life table by making the assumption that previously symptomatic/confirmed residents were discharged at the same rate as susceptible residents, as was suggested by the individual-level records. Admitted cases were accounted for in the daily new case count. Based on this $\hat{I_t}$, the estimated number or previously symptomatic/confirmed residents present in the home on day $t$ was computed as
+Manager-reported outbreak surveillance counts were used together with occupancy estimated from weekly occupied bed censuses in order to estimate the incidence of cases across time using a Kaplan-Meier life table product limit estimator. 
 
-$$\hat{I_t} = min(n_{t}/n_{t-1}, 1)( \hat{E}_{t-1} + d_{t-1}); \qquad  \qquad  \qquad I_{t_0} = 0$$
-where $d_{t}$ denotes the number of new cases for each day $t = \{0, \ldots, T\}$, while $min(n_{t}/n_{t-1}, 1)$ acts as an (underestimated) approximation of the discharge rate. The total exposure time was calculated as $\sum_{t=0}^{T} (N_t-\hat{I}_t)$ where $N_t$ denotes daily occupancy figures. 
+The life table records for every day $t = \{0, \ldots, T\}$:
+
+* $n_t$, the number of residents present in the home on day $t$
+* $I_t$, the number of residents infected up to and including day $t-1$ who are still present in the home
+* $d_t$, the number of residents with a new infection on day $t$ (includes residents admitted on day $t$ who got infected outside the home, for instance in hospital)
+* $S_t$, the number of exposed-to-risk residents, that is, the number of residents who have not yet had an infection and are susceptible to an infection.
+
+Note that on any day, $n_t = S_t + I_t$.
+
+Neither $S_{t}$ or $I_t$ were recorded as such by care homes. Instead, these numbers were approximated in a multiple decrement life table. For this, we assumed that:
+
+* no residents were infected before 24 March 2020 ($I_{t=0} = 0$) when tallies began
+* residents previously infected (counted in $I_t$) are discharged at the same rate as exposed-to-risk residents (counted in $S_t$). This assumption was verified in the individual-level records. 
+
+Admitted cases were accounted for in the daily new case count. Based on this 
+
+Based on these assumptions, we estimated $I_t$ and $S_t$ as
+
+$$\hat{I_t} = min(n_{t}/n_{t-1}, 1)( \hat{I}_{t-1} + d_{t-1}); \qquad  \qquad  \qquad I_{t=0} = 0$$
+
+$$\hat{S_t} = n_t - \hat{I_t}$$
+
+where $min(n_{t}/n_{t-1}, 1)$ serve as an (underestimated) approximation of the discharge rate.
+
+The cumulative exposure time (used for computing cumulative incidence) was calculated as $\sum_{t=0}^{T} \hat{S}_t$. 
 
 
 # Total homes, beds, contract beds, and residents within FSHCG and nationwide
