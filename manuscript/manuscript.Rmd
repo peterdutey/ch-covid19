@@ -1549,7 +1549,7 @@ summary(KM_mortality_by_covid_status)[c("time",  "n.risk", "n.event", "n.censor"
 
 ## Attributable mortality (individual-level data)
 
-Model-based estimates indicate that 653/1,694 (39%) all-cause deaths were attributable to COVID-19 (Table S7). In care homes with outbreaks only, just 217/653 (33%) deaths attributable to COVID-19 occurred in people with confirmed infection (Groups C and D).
+Model-based estimates indicate that 653/1,694 (39%) all-cause deaths were attributable to COVID-19 (Table S7). In care homes with outbreaks only, just 161/1014 (16%) deaths attributable to COVID-19 occurred in people with confirmed infection (Groups C and D).
 
 `r table_nums("tab_attributable_deaths")`
 
@@ -1653,7 +1653,7 @@ attributable_deaths %>% ungroup() %>% transmute(
 
 ## Main findings 
 
-Across 179 care homes, 22% of residents experienced symptoms while 10% had laboratory-confirmed infections, with a case-fatality rate of 35.7% across the first wave of the pandemic. Residents with no direct evidence of infection in care homes with outbreaks had twice the mortality of the equivalent group in care homes without outbreaks. Only one-third of deaths attributable to COVID-19 in outbreak care homes were confirmed due to insufficient testing capacity until late in the pandemic. In addition to the need for active surveillance and increased testing capacity, higher staff-to-resident ratios and reduced occupancy may be important to reduce the spread of infection.
+Across 179 care homes, 22% of residents experienced symptoms while 10% had laboratory-confirmed infections, with a case-fatality rate of 35.7% across the first wave of the pandemic. Residents with no direct evidence of infection in care homes with outbreaks had twice the mortality of the equivalent group in care homes without outbreaks. Only one in six deaths attributable to COVID-19 in outbreak care homes were confirmed due to insufficient testing capacity until late in the pandemic. In addition to the need for active surveillance and increased testing capacity, higher staff-to-resident ratios and reduced occupancy may be important to reduce the spread of infection.
 
 Our estimates are comparable to a large survey of managers of care homes in England.[@onsVivaldi2020] Both studies are likely to be underestimates due to limited testing, asymptomatic infection[@Salcher-Konrad2020] and moderate sensitivity of PCR testing.[@Kucirka2020] Our estimate of `r tbrounding(desc_residents$DAT_CFR_rate)`% case-fatality in residents with confirmed infection over a mean 71 days is slightly higher than previous literature,[@Blain2020; @McMichael2020; @Arons2020] but is based on longer follow-up, a larger number of residents, and our study population had higher overall mortality.
 
